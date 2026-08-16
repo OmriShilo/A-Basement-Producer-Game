@@ -673,8 +673,15 @@ function Plaque({ tier, label, count }) {
   const earned = count > 0;
   return (
     <div className={`plaque ${tier}${earned ? '' : ' locked'}`}>
-      <div className="plaque-label">{label}</div>
-      <div className="plaque-count">{earned ? `×${count}` : '—'}</div>
+      <div className="vinyl">
+        <span className="vinyl-shine" />
+        <span className="vinyl-label" />
+        <span className="vinyl-hole" />
+      </div>
+      <div className="plaque-text">
+        <div className="plaque-label">{label}</div>
+        <div className="plaque-count">{earned ? `×${count}` : '—'}</div>
+      </div>
     </div>
   );
 }
