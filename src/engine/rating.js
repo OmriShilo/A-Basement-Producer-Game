@@ -42,84 +42,94 @@ export function growthMultiplier(s) {
   return s.prodigy ? PRODIGY_GROWTH : NORMAL_GROWTH;
 }
 
-/* Below this, every point you earn is a point you get. */
-export const FULL_VALUE_BELOW = 60;
-/* Where the taper bottoms out. */
-export const TOP_BAND = 90;
-export const TOP_SCALE = 0.16;
-
-/* Jumps keep their full size right up to here — this is the band they exist
-   for, carrying a career from ordinary to serious in one year. */
-export const JUMP_FULL_BELOW = 80;
+/* ------------------------------------------------------------------ */
+/* THE ARC — rise, prime, decline                                      */
+/* ------------------------------------------------------------------ */
 
 /**
- * The very top of the scale is hard for everybody, jumps included.
+ * A career is not a running total, it is a shape: a steep climb through your
+ * twenties, a long prime where the number barely moves, and a decline. The old
+ * model had no shape at all — every year was worth the same fixed fraction of
+ * whatever the cards paid, so runs meandered instead of arcing, and the only
+ * thing separating a good career from a bad one was how many good cards it drew.
  *
- * Jumps deliberately bypass the ordinary taper, which is what makes a big
- * opportunity feel like one. But left completely unscaled they became the whole
- * game: certifications and milestones alone paid about +26 a run, every
- * strategy coasted to 99, and the tenth-percentile career finished at 91. A
- * jump is still worth its full face value for the entire climb; it is only the
- * last stretch above JUMP_FULL_BELOW that resists, and even there it resists
- * far less than ordinary points do.
+ * Two things produce the shape now.
+ *
+ * POTENTIAL is a ceiling rolled once per run and never shown. Growth is
+ * proportional to how far below it you are, so a 50 chasing an 88 climbs in
+ * fives and sixes, and the same player at 86 gains one at a time and then
+ * stops. That is what makes the plateau a plateau rather than a soft cap you
+ * grind through, and it is why two runs with identical cards can peak twenty
+ * points apart.
+ *
+ * AGE scales the whole thing down as you get older. You improve fastest before
+ * twenty-five, and after thirty-four almost nothing you do raises the number —
+ * by then the game is about holding on to it.
  */
-export function jumpScale(current) {
-  if (current <= JUMP_FULL_BELOW) return 1;
-  const t = Math.min(1, (current - JUMP_FULL_BELOW) / (99 - JUMP_FULL_BELOW));
-  return 1 - t * 0.8;
+
+/** Rolled once per run. Never shown, never explained, entirely load-bearing. */
+export function rollPotential(talent, prodigy, rand) {
+  const base = 70 + Math.floor(rand() * 26);       // 70..95
+  const p = Math.max(base, talent + 10) + (prodigy ? 4 : 0);
+  return Math.min(99, p);
 }
 
-/**
- * The last points are the hardest — but only the last ones.
- *
- * This was a single curve over the whole range (`1 - current/104`), which meant
- * a gain was being shaved from the very first year: at OVR 60 a +4 landed as
- * +2, at 80 a +6 landed as +1. Losses were never scaled, so the game quietly
- * paid out three lost gambles at −6/−5/−3 in full and then handed back +1 for
- * a placement. That asymmetry is what made the number feel like it only ever
- * went down.
- *
- * Now nothing is damped at all below FULL_VALUE_BELOW, the taper runs from
- * there to TOP_BAND, and only the top of the scale is genuinely hard. The
- * ceiling is held by how rarely the big cards come up, not by taxing every
- * ordinary year.
- */
-export function ratingScale(current) {
-  if (current <= FULL_VALUE_BELOW) return 1;
-  const t = Math.min(1, (current - FULL_VALUE_BELOW) / (TOP_BAND - FULL_VALUE_BELOW));
-  return 1 - t * (1 - TOP_SCALE);
+/** How much of the climb is left, as a multiplier on everything you earn. */
+export function growthRoom(s) {
+  const room = s.potential - s.rating;
+  if (room <= 0) return 0.08;                       // at your ceiling: near nothing
+  return Math.min(2.6, Math.max(0.18, room / 9));
+}
+
+/** You improve fastest young. After 34 the number is something you defend. */
+export function ageFactor(age) {
+  if (age <= 24) return 1;
+  if (age >= 34) return 0.30;
+  return 1 - ((age - 24) / 10) * 0.70;
+}
+
+export function ratingScale(s) {
+  return growthRoom(s) * ageFactor(s.age);
 }
 
 /**
  * Losses are damped too, but only half as much as gains.
  *
- * They used to land at face value while gains were taxed by the full taper,
- * which at OVR 85 meant a −6 cost you six and a +6 earned you two. That reads
- * as the game punishing you three times harder than it pays you, and it is the
- * single reason the number felt like it only went down.
+ * They used to land at face value while gains were taxed, which meant a -6 cost
+ * six and a +6 earned one. That reads as the game punishing you three times
+ * harder than it pays you. Halfway is the honest place to land: the world still
+ * takes it back faster than it hands it over, but not by a factor of three.
  *
- * Halfway is the honest place to land: the world still takes it back faster
- * than it hands it over — which is true, and which keeps a bad year frightening
- * — but not by a factor of three.
+ * Deliberately NOT proportional to remaining room — being near your ceiling
+ * should not armour you. A bad year at your peak is exactly when it hurts.
  */
-export function lossScale(current) {
-  return (1 + ratingScale(current)) / 2;
+export function lossScale(s) {
+  return (1 + Math.min(1, growthRoom(s))) / 2;
+}
+
+/**
+ * Jumps are the big moments — the first real credit, a plaque, a session that
+ * changes everything — and they land at full face value for the whole climb.
+ * They only resist inside the last few points of your ceiling, where they would
+ * otherwise erase the difference between a good career and a great one.
+ */
+export function jumpScale(s) {
+  const room = s.potential - s.rating;
+  if (room >= 8) return 1;
+  if (room <= 0) return 0.15;
+  return 0.15 + (room / 8) * 0.85;
 }
 
 /**
  * Apply a whole number of rating points.
  *
- * Gains are amplified by the prodigy/plateau multiplier and damped by the
- * ceiling; losses are damped on the gentler curve above. Everything is rounded,
- * so the number on screen never moves by a fraction.
+ * Everything is rounded, so the number on screen never moves by a fraction.
  */
 export function applyRating(s, points) {
   if (!points) return 0;
-  // No floor. A turn is one year now, and a year that moves the number by
-  // nothing is an ordinary thing in a career — the log has a line for it.
   const factor = points > 0
-    ? growthMultiplier(s) * ratingScale(s.rating)
-    : lossScale(s.rating);
+    ? growthMultiplier(s) * ratingScale(s)
+    : lossScale(s);
   const moved = Math.round(points * factor);
   const before = s.rating;
   s.rating = Math.max(0, Math.min(99, s.rating + moved));
@@ -144,7 +154,7 @@ export const FIRST_BIG_JUMP = { 3: 4, 4: 6, 5: 9 };
 export function applyJump(s, points) {
   if (!points) return 0;
   const before = s.rating;
-  const moved = points > 0 ? Math.round(points * jumpScale(s.rating)) : points;
+  const moved = points > 0 ? Math.round(points * jumpScale(s)) : points;
   s.rating = Math.max(0, Math.min(99, s.rating + moved));
   return s.rating - before;
 }

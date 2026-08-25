@@ -7,7 +7,7 @@ export { overallRating, ratingTier } from './rating.js';
 import {
   rollTalent, applyRating,
   PRODIGY_AT, UNDERDOG_AT, PLATEAU_CHANCE, PLATEAU_FROM_TURN,
-  FIRST_BIG_JUMP, CERT_JUMP, applyJump,
+  FIRST_BIG_JUMP, CERT_JUMP, applyJump, rollPotential,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
 import { hashSeed, mulberry32, weightedPick, newSeed } from './rng.js';
@@ -85,6 +85,9 @@ export function createRun(cabinet, seed = newSeed()) {
   // THE TALENT ROLL — the one thing decided before you play a note.
   const talent = rollTalent(mulberry32(hashSeed(`${seed}|talent`)));
   const prodigy = talent >= PRODIGY_AT;
+  // The ceiling for this run. Rolled here, never shown, and the single thing
+  // that decides whether this career plateaus at 74 or at 93.
+  const potential = rollPotential(talent, prodigy, mulberry32(hashSeed(`${seed}|potential`)));
   const flags = new Set();
   if (talent <= UNDERDOG_AT) flags.add('underdog');
   return {
@@ -93,6 +96,7 @@ export function createRun(cabinet, seed = newSeed()) {
     turn: 0,
     age: TURNS[0].age,
     talent,
+    potential,
     rating: talent,
     prodigy,
     plateaued: false,
@@ -100,6 +104,7 @@ export function createRun(cabinet, seed = newSeed()) {
     placements: [],
     firstBigDone: false,   // the first tier-3+ credit pays a one-time jump
     firstBigTier: 0,
+    heat: 0,               // years of elevated reach left after a big credit
     rackVisits: 0,     // drives the rack's diminishing return — see engine/rack.js
     maxPlacementTier: 0,
     undergroundCount: 0,
@@ -159,6 +164,8 @@ function applyFx(s, fxIn) {
       events.push({ kind: 'ratingJump', amount: FIRST_BIG_JUMP[p.tier] });
       events.push({ kind: 'firstBig', tier: p.tier, artist: p.artist });
     }
+    // Any big credit — not just the first — keeps the phone ringing for a while.
+    if (!p.underground && p.tier >= 3) s.heat = HEAT_YEARS;
     if (p.region !== 'US') {
       events.push({ kind: 'rating', amount: 2 });
       events.push({ kind: 'territory', text: `Reach outside ${TERRITORY_NAME.US} — ${TERRITORY_NAME[p.region]}. +2 Overall.` });
@@ -188,6 +195,48 @@ function territoryOpen(s, region) {
  * open is tier 1, and the top of the roster cannot appear at all until 31.
  */
 const ANY_TIER_WEIGHT = { 1: 40, 2: 26, 3: 18, 4: 11, 5: 5 };
+
+/**
+ * HOW FAR YOU CAN REACH — the room you can get into on your credits.
+ *
+ * A credit is a door. Land a tier-3 record and tier-4 rooms start returning
+ * your calls; land a tier-4 and the top of the roster becomes reachable at all.
+ * Rating alone opens the bottom of the ladder so a run that has not placed
+ * anything yet is never stuck, but past tier 2 the only thing that moves this
+ * is having actually done it — which is what makes a big placement feel like it
+ * changed something rather than just paying out a number.
+ */
+export function reachTier(s) {
+  const fromCredits = s.maxPlacementTier + 1;
+  const fromRating = s.rating >= 85 ? 3 : s.rating >= 75 ? 2 : 1;
+  return Math.max(1, Math.min(5, Math.max(fromCredits, fromRating)));
+}
+
+/** Years of elevated reach after a big credit — the phone rings for a while. */
+export const HEAT_YEARS = 3;
+
+/**
+ * The draw weights for a card cast as 'any', bent toward what you can reach.
+ *
+ * Flat weights meant the invitation dealt a tier-1 room 40% of the time whether
+ * you were sixteen with nothing or forty with a diamond plaque. Now the tiers
+ * at and just below your reach are the likely ones, and while you are hot off a
+ * big credit the top of that range gets likelier still.
+ */
+function anyTierOptions(s) {
+  const reach = reachTier(s);
+  const hot = (s.heat || 0) > 0;
+  return openTiers(s)
+    .filter(({ tier }) => tier <= reach)
+    .map(({ tier, weight }) => {
+      const gap = reach - tier;
+      // at your reach: heavily favoured; one below: still common; far below:
+      // the rooms you have outgrown, which should mostly stop calling
+      let bias = gap === 0 ? 3.2 : gap === 1 ? 1.8 : gap === 2 ? 0.7 : 0.25;
+      if (hot && gap === 0) bias *= 1.6;
+      return { tier, weight: weight * bias };
+    });
+}
 
 /** The tiers a card cast as 'any' could reach at this age, with weights. */
 function openTiers(s) {
@@ -219,7 +268,7 @@ function castFor(s, card, rand) {
   // artists that tier holds. Everything else draws from a single fixed pool,
   // where an even pick across the pool is already the right distribution.
   if (card.cast && card.cast.track === 'any') {
-    const tiers = openTiers(s);
+    const tiers = anyTierOptions(s);
     if (!tiers.length) return null;
     const { tier } = weightedPick(tiers, rand);
     const pool = ROSTER[TIER_KEY_BY_LEVEL[tier]] || [];
@@ -257,6 +306,9 @@ function meets(s, card) {
     // ability and none of the career — so the reach is gated on age centrally
     // rather than by editing a tier floor into every card.
     if (card.cast.tier && s.age < TIER_OPENS_AT[card.cast.tier]) return false;
+    // ...and you have to have earned your way into rooms that size. One tier
+    // above your best credit is as far as anyone will take a chance on you.
+    if (card.cast.tier && card.cast.tier > reachTier(s)) return false;
   }
   return true;
 }
@@ -563,6 +615,7 @@ function yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, 
 }
 
 export function advance(s) {
+  if (s.heat > 0) s.heat -= 1;
   s.turn += 1;
   if (s.turn >= TURNS.length) return retire(s, false);
   s.age = TURNS[s.turn].age;
@@ -572,7 +625,7 @@ export function advance(s) {
 }
 
 /** The age the years start taking it back, and the age they start hurting. */
-export const DECAY_FROM_AGE = 32;
+export const DECAY_FROM_AGE = 34;
 export const DECAY_BITES_AGE = 42;
 
 /**
@@ -585,9 +638,15 @@ export const DECAY_BITES_AGE = 42;
 function decayFor(s) {
   if (s.age < DECAY_FROM_AGE) return 0;
   const made = s.placements.filter((p) => p.turn === s.turn);
-  if (made.some((p) => p.tier >= 3)) return 0;
-  const base = s.age >= DECAY_BITES_AGE ? 2 : 1;
-  return made.length ? Math.max(0, base - 1) : base;
+  const big = made.some((p) => p.tier >= 3);
+  // Ramps with age. Through the thirties a real credit still holds it off
+  // completely; past the mid-forties nothing does entirely, and the last years
+  // come off the number whatever you do. That tail is the shape of the thing —
+  // a career ends by declining, not by stopping.
+  const base = s.age >= 44 ? 2 : s.age >= 39 ? 2 : 1;
+  if (big) return Math.max(0, base - 2);
+  if (made.length) return Math.max(0, base - 1);
+  return base;
 }
 
 /** Cards may carry an outright rating jump on top of their stat movement. */
@@ -606,7 +665,10 @@ function resolveCertifications(s, rand) {
       2: { gold: 0.25 },
       3: { gold: 0.6, platinum: 0.2 },
       4: { gold: 0.85, platinum: 0.5, multi: 0.15 },
-      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.04 },
+      // Halved from 0.04: reach means a broken-through career now lands far
+      // more tier-5 credits than it used to, which took Diamond from 1-in-35
+      // runs to 1-in-15. The plaque should stay the rarest thing in the game.
+      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.018 },
     }[q.tier] || {};
     const u = rand() - boost;
     let level = null;
