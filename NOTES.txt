@@ -1,0 +1,100 @@
+NOTES — 2026-08-26
+==================
+
+Four things to pick up tomorrow. Your notes are verbatim; the indented
+lines under each are just pointers to where the work would land, so you
+don't have to go looking.
+
+
+1. "add new choices, like signing to a label, or staying on tour with
+    an artist"
+
+    Cards live in src/content/cards.js. There are 48 right now:
+    21 green (regular), 20 yellow (gamble), 7 repeatable filler.
+    The schema is documented at the top of that file.
+
+    Both examples want something the deck cannot express yet: a choice
+    whose consequences run for SEVERAL YEARS rather than resolving in
+    the one you took it. Signing to a label and staying out on tour are
+    both multi-year commitments, and right now every card starts and
+    finishes inside a single turn.
+
+    So this is probably a small engine feature first — a commitment
+    that occupies the next N years, or gates/forces what gets drawn
+    while it runs — and then cards written against it. The existing
+    'manager_pending' flag is the closest thing in there already: it is
+    set at signing and revealed years later, so it is a decent model to
+    copy.
+
+
+2. "genre specific choices"
+
+    Every roster artist already carries a `genre` field
+    (src/content/roster.js), and roster.js also has GENRE_TO_CHART
+    mapping 94 genre tags onto the 12 real Billboard chart categories.
+    None of it is read by the card system today.
+
+    Worth deciding up front which of these you mean, because they pull
+    in different directions:
+      - cards that only appear if you have worked in a genre
+      - a genre identity you accumulate and that then shapes your draws
+      - genre as something you can deliberately switch, at a cost
+
+    The third is the most interesting and the most work.
+
+
+3. "fix site scaling to fit in the same screen without having to
+    scroll"
+
+    src/styles.css. The Career Review screen is a two-column grid
+    (.screen-l / .screen-r) with a 6-row log; the log folding is what
+    keeps the height bounded, controlled by LOG_ROWS in src/App.jsx.
+
+    Known departure from the original design handoff, written in the
+    header comment of styles.css: the mock was a fixed 1920x1080 frame
+    scaled to fit, and this is fluid instead. Getting to no-scroll
+    probably means going back toward the mock — a fixed aspect frame
+    that scales — or capping the whole thing at 100vh and letting the
+    log take whatever is left.
+
+    Check the end screen and the trophy cabinet too, not just the turn
+    screen. The cabinet is the longest page in the game.
+
+
+4. "fix text clutterness, too much info on the screen"
+
+    Related to 3 and probably worth doing first — if less is on screen,
+    the scaling problem gets smaller on its own.
+
+    Densest areas, roughly in order:
+      - the year log: year / age / action / plaques / awards / outcome
+        is six columns
+      - the ON TAPE strip, which repeats credit information that is
+        also in the log
+      - the OVR card: number, delta, "since YEAR", the decile bar and
+        the talent line, all stacked
+      - option cards carry title, body, and now the odds line on yellow
+        ones
+
+
+ALSO OPEN (not from your notes)
+-------------------------------
+
+- The Rack's source now exists in two places: src/rack/ here, and the
+  OmriShilo/fidget-studio repo. They have already diverged (mount and
+  dispose, headless session, React chrome). Worth deciding which is
+  the source of truth before either moves again.
+
+- roster.js carries 135 real artists by name, and listeners.js now
+  attaches real Spotify figures to them. The repo is public. Fine for
+  a hobby project; a rights question if this ever goes commercial.
+
+- Monthly listener figures are a snapshot taken 2026-08-26 and will
+  drift. Nothing in the game reads them — tier drives every mechanic —
+  so staleness costs display accuracy only. Refresh by re-scraping the
+  kworb tables and regenerating the block in listeners.js.
+
+- Browser verification of the last change was incomplete: the preview
+  pane kept closing, so the arc and reach work was verified through
+  the engine and the production build rather than by playing it in the
+  UI. Worth a real playthrough early tomorrow.
