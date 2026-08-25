@@ -13,6 +13,8 @@
  * Entry shape: { name, region, genre }
  *   region: see TERRITORY_NAME below
  */
+import { listenersFor } from './listeners.js';
+
 
 export const ROSTER = {
   // 30 slots — global icons. A placement here is career-defining.
@@ -367,4 +369,30 @@ export function makeLocalName(rand) {
   const a = FIRST[Math.floor(rand() * FIRST.length)];
   const b = LAST[Math.floor(rand() * LAST.length)];
   return { name: `${a} ${b}`, region: 'US', genre: 'unsigned' };
+}
+
+/* ------------------------------------------------------------------ */
+/* MONTHLY LISTENERS                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every roster artist's monthly listeners, keyed by name.
+ *
+ * Built once at load from their tier — see listeners.js, which also carries the
+ * warning that these figures are invented for the game and are not the real
+ * ones. Directors are not in here: they do not have listeners, and a credit
+ * that is not a roster artist at all (a television series, a short film) falls
+ * out as null, which is what tells the UI to print nothing rather than a zero.
+ */
+const LISTENERS = new Map();
+for (const [key, tier] of Object.entries({
+  tier1_local: 1, tier2_rising: 2, tier3_national: 3, tier4_international: 4, tier5_global: 5,
+})) {
+  for (const a of ROSTER[key] || []) LISTENERS.set(a.name, listenersFor(a.name, tier, false));
+}
+for (const a of ROSTER.underground_us || []) LISTENERS.set(a.name, listenersFor(a.name, 1, true));
+
+/** Monthly listeners for a credited name, or null if it is not a roster artist. */
+export function listenersOf(name) {
+  return LISTENERS.has(name) ? LISTENERS.get(name) : null;
 }

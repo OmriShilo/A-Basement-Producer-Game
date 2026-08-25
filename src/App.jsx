@@ -11,7 +11,8 @@ import {
 const Rack = React.lazy(() => import('./ui/Rack.jsx'));
 import { STANDING, isArchitect } from './engine/status.js';
 import { PRODIGY_AT } from './engine/rating.js';
-import { ROSTER, BILLBOARD_CHARTS } from './content/roster.js';
+import { ROSTER, BILLBOARD_CHARTS, listenersOf } from './content/roster.js';
+import { formatListeners } from './content/listeners.js';
 import { loadCabinet, saveCabinet, wipeCabinet } from './persist.js';
 import { drawCareerCard, downloadCanvas } from './ui/careerCard.js';
 
@@ -20,6 +21,20 @@ const ROSTER_TOTAL = ROSTER_ARTISTS.length;
 
 /** How many detail rows the log shows before older years fold away. */
 const LOG_ROWS = 6;
+
+/**
+ * How big the act on a credit is, in the unit a player actually feels.
+ *
+ * Monthly listeners rather than the internal tier number. Credits that are not
+ * a roster artist — a television series, a short film — have no listener count,
+ * so they say what kind of credit they are instead of printing a hole.
+ */
+function creditSize(p) {
+  const n = listenersOf(p.artist);
+  if (n === null) return p.underground ? 'UNDERGROUND' : 'CREDIT';
+  const shown = `${formatListeners(n)} MONTHLY`;
+  return p.underground ? `UNDERGROUND · ${shown}` : shown;
+}
 
 const PLAQUE_ORDER = [
   ['gold', 'GOLD'],
@@ -534,7 +549,7 @@ function EndScreen({ s, name, onCabinet, onTitle }) {
               <div className="entry" key={i}>
                 <span className="who">{p.artist}</span>
                 <span className="meta">
-                  {p.underground ? 'UNDERGROUND' : `TIER ${p.tier}`}{p.score ? ' · SCORE' : ''} · {START_YEAR + p.turn}
+                  {creditSize(p)}{p.score ? ' · SCORE' : ''} · {START_YEAR + p.turn}
                 </span>
               </div>
             ))}

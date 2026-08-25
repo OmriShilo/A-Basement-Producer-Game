@@ -7,6 +7,7 @@ export { overallRating, ratingTier } from './rating.js';
 import {
   rollTalent, applyRating,
   PRODIGY_AT, UNDERDOG_AT, PLATEAU_CHANCE, PLATEAU_FROM_TURN,
+  FIRST_BIG_JUMP, CERT_JUMP, applyJump,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
 import { hashSeed, mulberry32, weightedPick, newSeed } from './rng.js';
@@ -97,6 +98,8 @@ export function createRun(cabinet, seed = newSeed()) {
     plateaued: false,
     plateauedAt: null,
     placements: [],
+    firstBigDone: false,   // the first tier-3+ credit pays a one-time jump
+    firstBigTier: 0,
     rackVisits: 0,     // drives the rack's diminishing return — see engine/rack.js
     maxPlacementTier: 0,
     undergroundCount: 0,
@@ -148,6 +151,14 @@ function applyFx(s, fxIn) {
     s.placements.push(p);
     if (!p.underground) s.maxPlacementTier = Math.max(s.maxPlacementTier, p.tier);
     if (p.underground) s.undergroundCount += 1;
+
+    // THE FIRST BIG ONE — paid once, as a jump, sized by how big it was.
+    if (!p.underground && !s.firstBigDone && FIRST_BIG_JUMP[p.tier]) {
+      s.firstBigDone = true;
+      s.firstBigTier = p.tier;
+      events.push({ kind: 'ratingJump', amount: FIRST_BIG_JUMP[p.tier] });
+      events.push({ kind: 'firstBig', tier: p.tier, artist: p.artist });
+    }
     if (p.region !== 'US') {
       events.push({ kind: 'rating', amount: 2 });
       events.push({ kind: 'territory', text: `Reach outside ${TERRITORY_NAME.US} — ${TERRITORY_NAME[p.region]}. +2 Overall.` });
@@ -406,12 +417,18 @@ export function resolveYear(s, pick, extra = {}) {
     s.card = null; s.cast = null;
   }
 
-  // 3. after 34 the world starts taking it back
-  let decay = 0;
-  if (s.turn >= DECAY_START_TURN) {
-    const madeSomething = s.placements.some((p) => p.turn === s.turn);
-    decay = madeSomething ? 0 : 1;
-  }
+  // 3. the world starts taking it back
+  //
+  // Relevance is rented, not owned. Without a real decline the arithmetic of
+  // 34 years does not work: roughly eighteen of them score, seven lose, and
+  // every strategy drifts to 99 no matter what it picks. Decay is what makes
+  // the back half of a career about holding on to something rather than
+  // continuing to accumulate — and it is what makes a quiet year at 44 cost
+  // you, which is true to the thing being simulated.
+  //
+  // A year where you actually made something big is exempt: staying relevant
+  // is the whole defence against this.
+  const decay = decayFor(s);
 
   // 4. certifications land one to two turns after the placement
   const certEvents = resolveCertifications(s, rand);
@@ -442,10 +459,16 @@ export function resolveYear(s, pick, extra = {}) {
   const ratingBefore = s.rating;
   const earned = [...events, ...certEvents, ...awardEvents]
     .reduce((a, e) => a + (e.kind === 'rating' ? e.amount : 0), 0);
-  applyRating(s, earned - decay);
+  // Earnings and decay are applied separately. Netting them first meant a year
+  // that earned 3 and decayed 2 was scaled as a GAIN of 1 — the decay was
+  // quietly being discounted by the gain curve instead of costing what it says.
+  applyRating(s, earned);
+  if (decay) applyRating(s, -decay);
   // A jump is a card handing you a career in one turn — it bypasses scaling.
-  const jump = ratingJumpFrom(events);
-  if (jump) s.rating = Math.max(0, Math.min(99, s.rating + jump));
+  // Certifications queue jumps too, so they have to be summed here as well;
+  // reading only `events` silently dropped every plaque's contribution.
+  const rawJump = ratingJumpFrom([...events, ...certEvents]);
+  const jump = applyJump(s, rawJump);
   const ratingMove = s.rating - ratingBefore;
 
   // 9. THE PLATEAU — the prodigy who simply stops. Rolled once per turn from
@@ -548,6 +571,25 @@ export function advance(s) {
   return beginYear(s);
 }
 
+/** The age the years start taking it back, and the age they start hurting. */
+export const DECAY_FROM_AGE = 32;
+export const DECAY_BITES_AGE = 42;
+
+/**
+ * What this year costs you for not being current.
+ *
+ * Nothing at all before 32. After that a year with no credit costs a point,
+ * and from 42 it costs two. A credit of tier 3 or better cancels it outright —
+ * you are still in the room, so nothing erodes. A small credit halves it.
+ */
+function decayFor(s) {
+  if (s.age < DECAY_FROM_AGE) return 0;
+  const made = s.placements.filter((p) => p.turn === s.turn);
+  if (made.some((p) => p.tier >= 3)) return 0;
+  const base = s.age >= DECAY_BITES_AGE ? 2 : 1;
+  return made.length ? Math.max(0, base - 1) : base;
+}
+
 /** Cards may carry an outright rating jump on top of their stat movement. */
 function ratingJumpFrom(events) {
   return events.reduce((a, e) => a + (e.kind === 'ratingJump' ? e.amount : 0), 0);
@@ -574,7 +616,9 @@ function resolveCertifications(s, rand) {
     else if (table.gold !== undefined && u < table.gold) level = 'gold';
     if (level) {
       s.certs[level] += 1;
-      out.push({ kind: 'rating', amount: { gold: 1, platinum: 2, multi: 3, diamond: 5 }[level] });
+      // A jump, not ordinary points: a plaque should read the same at OVR 85
+      // as it does at 60, and it is the dependable way up the back half.
+      out.push({ kind: 'ratingJump', amount: CERT_JUMP[level] });
       out.push({ level, artist: q.artist, tier: q.tier });
     }
   }

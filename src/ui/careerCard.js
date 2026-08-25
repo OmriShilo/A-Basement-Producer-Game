@@ -1,6 +1,8 @@
 import { overallRating, ratingTier } from '../engine/rating.js';
 import { STANDING } from '../engine/status.js';
 import { turningPoints, topPlacements } from '../engine/game.js';
+import { listenersOf } from '../content/roster.js';
+import { formatListeners } from '../content/listeners.js';
 
 /* Photocopy / Y2K career card — same language as the screens:
    white stock, 3px black rules, Anton display, chrome bevel on the name,
@@ -275,7 +277,13 @@ function paint(ctx, s, producerName, H) {
       ctx.fillText(p.artist.toUpperCase(), M + 44, y);
       ctx.font = `700 12px ${MONO}`;
       ctx.fillStyle = SUB;
-      const meta = `${p.underground ? 'UNDERGROUND' : `TIER ${p.tier}`} · AGE ${p.age}`;
+      // Same unit as the credits list on screen — monthly listeners, not the
+      // internal tier. A credit with no roster artist behind it has no count.
+      const listeners = listenersOf(p.artist);
+      const size = listeners === null
+        ? (p.underground ? 'UNDERGROUND' : 'CREDIT')
+        : `${formatListeners(listeners)} MONTHLY`;
+      const meta = `${size} · AGE ${p.age}`;
       ctx.fillText(meta, W - M - ctx.measureText(meta).width, y);
       y += 32;
     });
