@@ -23,8 +23,8 @@ export function bandOf(age) {
 /* FOCUS LINES — the default texture of a turn                         */
 /* ------------------------------------------------------------------ */
 
-export const FOCUS_LINES = {
-  CRAFT: {
+export const QUIET_LINES = {
+  ROOM: {
     young: [
       'you learned what a compressor actually does. It took the whole summer.',
       "you told your mother you weren't going to apply anywhere.",
@@ -54,7 +54,7 @@ export const FOCUS_LINES = {
       'you stopped chasing the sound and let it come to the house.',
     ],
   },
-  HUSTLE: {
+  CIRCUIT: {
     young: [
       'you sent two hundred emails and got three replies. Two were polite.',
       'you drove four hours to hand somebody a USB stick in a parking lot.',
@@ -79,51 +79,26 @@ export const FOCUS_LINES = {
       'you kept a list of everyone who stopped calling and never did anything with it.',
     ],
   },
-  MONEY: {
+  LONGSHOT: {
     young: [
-      'you sold beats for $20 to people who never released them.',
-      'you worked the closing shift and produced from midnight to four.',
-      'you did the jingle for the dealership on Route 9. It ran for six years.',
-      'you charged $50, hated every second, and paid off the interface.',
-      'you taught two neighborhood kids Ableton for cash and were better at it than you expected.',
+      'you turned down three things waiting on one that never called.',
+      'you spent the year making a single beat for a single person who did not know you existed.',
+      'you refused everything small and sat by the phone like an idiot, and were right about half of it.',
+      'you picked one door and knocked on it until your hand hurt.',
+      'you told everyone you were busy. You were not busy.',
     ],
     peak: [
-      'you took the ad work. It paid for the year.',
-      'you made a lot of music you would never put your name on.',
-      'you got very good at making things that sound like other things.',
-      'you bought the house. It is a nice house.',
-      'you said yes to everything and by December could not name one of them.',
-      'the invoices went out on time, every time, and that became the identity.',
+      'you cleared the calendar for something that was not confirmed and never became confirmed.',
+      'you bet the year on one room and walked in like you belonged there.',
+      'you said no to the sure thing. Twice.',
+      'you spent eleven months waiting on a yes and got it in the twelfth.',
+      'you stopped taking meetings that were not the meeting.',
     ],
     late: [
-      'you did the library music. It is fine. It is fine.',
-      'you spent the years servicing other people’s ideas and got paid properly for it.',
-      'you scored the corporate thing. Nobody will ever hear it and it cleared six figures.',
-      'you signed a sync deal that gave away more than you told anyone.',
-    ],
-  },
-  LIFE: {
-    young: [
-      'you took a summer off and came back hearing things differently.',
-      'you fell in love and made nothing for eight months and do not regret it.',
-      'you slept. It turned out to have been the whole problem.',
-      'you went outside. Everybody said you looked better.',
-      'you got a normal job for a while and were unremarkable at it, happily.',
-    ],
-    peak: [
-      'you stopped sleeping in the studio.',
-      'you went to your sister’s wedding instead of the session.',
-      'the B room became a bedroom.',
-      'you took the first real vacation of your adult life and cried in an airport for no reason.',
-      'you started going to the doctor like a person.',
-      'you let the phone ring and the world did not end.',
-    ],
-    late: [
-      'you started walking in the mornings. The ideas came back a little.',
-      'you missed the ceremony to be at the hospital and never told anyone which you chose.',
-      'you learned to cook properly. It is the same job, honestly.',
-      'you sat in the yard for two years and let it get quiet.',
-      'you made peace with the size of it.',
+      'you were too old to be gambling and did it anyway.',
+      'you held out for the one that mattered and the phone did not ring once.',
+      'you chased the record you had wanted since you were nineteen and very nearly got it.',
+      'everyone told you to take the work. You did not take the work.',
     ],
   },
 };
@@ -133,12 +108,6 @@ export const FOCUS_LINES = {
 /* ------------------------------------------------------------------ */
 
 export const CONDITION_LINES = {
-  broke: [
-    'the card got declined at the gas station. You laughed about it later.',
-    'you sold the good mic.',
-    'you moved back in. Everyone was nice about it, which was worse.',
-    'you started counting sessions in rent.',
-  ],
   promoted: [
     'people started saying your name like it meant something specific.',
     'a stranger knew what you did before you said it.',
@@ -155,10 +124,6 @@ export const CONDITION_LINES = {
     'you heard it in a car that was not yours.',
     'somebody played it back to you not knowing you made it.',
     'your name was in the credits, spelled wrong.',
-  ],
-  richYear: [
-    'the money arrived all at once and did not feel like anything.',
-    'the accountant used the word “structure” and you agreed to it.',
   ],
 };
 
@@ -185,18 +150,20 @@ export function fill(line, vars) {
   return line.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? vars[k] : m));
 }
 
+const QUIET_KEYS = Object.keys(QUIET_LINES);
+
 /**
- * Choose the diary line for a turn.
- * `weight` decides what makes the career card: cards outrank conditions,
- * conditions outrank plain focus lines.
+ * Choose the diary line for a year.
+ * `weight` decides what makes the career card: the year's card outranks a
+ * condition line, which outranks the filler used for an empty year.
  */
 export function writeDiaryLine(ctx, rand) {
-  const { focus, age, cardLine, condition } = ctx;
+  const { age, cardLine, condition } = ctx;
   if (cardLine) return { text: cardLine, weight: 5 };
   if (condition && CONDITION_LINES[condition]) {
-    const w = condition === 'demoted' || condition === 'firstPlacement' ? 4 : 3;
-    return { text: pick(CONDITION_LINES[condition], rand), weight: w };
+    return { text: pick(CONDITION_LINES[condition], rand), weight: 3 };
   }
   const band = bandOf(age);
-  return { text: pick(FOCUS_LINES[focus][band], rand), weight: 1 };
+  const key = QUIET_KEYS[Math.floor(rand() * QUIET_KEYS.length)];
+  return { text: pick(QUIET_LINES[key][band], rand), weight: 1 };
 }

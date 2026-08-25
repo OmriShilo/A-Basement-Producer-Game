@@ -1,4 +1,5 @@
-import { STATUS } from '../engine/status.js';
+import { overallRating, ratingTier } from '../engine/rating.js';
+import { STANDING } from '../engine/status.js';
 import { turningPoints, topPlacements } from '../engine/game.js';
 
 /* Photocopy / Y2K career card — same language as the screens:
@@ -173,18 +174,17 @@ function paint(ctx, s, producerName, H) {
   y += 22;
   rule(ctx, M, y, W - M);
 
-  // status block
+  // standing block — a name, not a tier
   y += 30;
-  const st = STATUS[s.status];
   ctx.font = `24px ${ANTON}`;
-  const chipW = ctx.measureText(st.name).width + 30;
-  ctx.fillStyle = st.color;
+  const chipW = ctx.measureText(STANDING).width + 30;
+  ctx.fillStyle = '#111111';
   ctx.fillRect(M, y - 22, chipW, 36);
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
   ctx.strokeRect(M + 1.5, y - 20.5, chipW - 3, 33);
   ctx.fillStyle = '#fff';
-  ctx.fillText(st.name, M + 15, y + 4);
+  ctx.fillText(STANDING, M + 15, y + 4);
 
   if (s.snapshot.architect) {
     markerText(ctx, 'underground canon', M + chipW + 34, y + 6, 26, SIGNAL, '#fff', -6);
@@ -310,7 +310,7 @@ function paint(ctx, s, producerName, H) {
 
   ctx.font = `30px ${ANTON}`;
   ctx.fillStyle = INK;
-  ctx.fillText(STATUS[s.status].name, M + 58, footY);
+  ctx.fillText(STANDING, M + 58, footY);
 
   ctx.font = `700 15px ${MONO}`;
   ctx.fillStyle = SIGNAL;
@@ -320,7 +320,7 @@ function paint(ctx, s, producerName, H) {
   ctx.font = `400 12px ${MONO}`;
   ctx.fillStyle = SUB;
   ctx.fillText(
-    `SKILL ${s.skill} · TASTE ${s.taste} · RELEVANCE ${s.relevance} · CONNECTIONS ${s.connections} · $${s.cash.toLocaleString()}`,
+    `OVERALL ${overallRating(s)} · ${ratingTier(overallRating(s))}`,
     M + 58, footY + 26
   );
 

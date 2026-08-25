@@ -1,77 +1,44 @@
 import { CARDS } from '../content/cards.js';
 import { ROSTER, TIER_KEY_BY_LEVEL, TERRITORY_UNLOCK, TERRITORY_NAME, makeLocalName, NAME_TO_CHART } from '../content/roster.js';
 import { writeDiaryLine, fill, RETIREMENT_LINES, bandOf } from '../content/diary.js';
-import { computeStatus, isArchitect } from './status.js';
+import { STANDING, isArchitect } from './status.js';
+// re-exported so the UI keeps a single import site
+export { overallRating, ratingTier } from './rating.js';
+import {
+  rollTalent, applyRating,
+  PRODIGY_AT, UNDERDOG_AT, PLATEAU_CHANCE, PLATEAU_FROM_TURN,
+} from './rating.js';
+import { scoreRackVisit, rackOutcome } from './rack.js';
 import { hashSeed, mulberry32, weightedPick, newSeed } from './rng.js';
 
 /* ------------------------------------------------------------------ */
-/* THE CLOCK — turns get longer, so the years visibly accelerate       */
+/* THE CLOCK — one turn is one year                                    */
 /* ------------------------------------------------------------------ */
 
-export const TURNS = [
-  { age: 14, span: 2 }, { age: 16, span: 2 }, { age: 18, span: 2 }, { age: 20, span: 2 },
-  { age: 22, span: 3 }, { age: 25, span: 3 }, { age: 28, span: 3 }, { age: 31, span: 3 },
-  { age: 34, span: 4 }, { age: 38, span: 4 }, { age: 42, span: 4 }, { age: 46, span: 4 },
-];
+export const START_AGE = 16;
 export const END_AGE = 50;
-export const DECAY_START_TURN = 8; // age 34
+/** The calendar year the career opens in — the log reads in real years. */
+export const START_YEAR = 2015;
 
-// `costs` is band-aware: relevance does not drain before 22, and saying it
-// does would be a lie the player can check.
-// `level` (1–5) drives the tracklist level meters: how hard this focus moves
-// the needle in this band. `costs` is band-aware because relevance does not
-// drain before 22, and saying it does would be a lie the player can check.
-export const FOCUSES = {
-  CRAFT: {
-    name: 'CRAFT', blurb: 'Production, mixing, songwriting.', gives: '+Skill +Taste',
-    costs: { young: 'Costs you nothing yet', peak: '−Relevance', late: '−Relevance' },
-    level: { young: 5, peak: 4, late: 3 },
-  },
-  HUSTLE: {
-    name: 'HUSTLE', blurb: 'Posting, networking, showing up.', gives: '+Relevance +Connections',
-    costs: { young: 'Costs you nothing yet', peak: 'Costs you nothing yet', late: '−Taste' },
-    level: { young: 4, peak: 5, late: 3 },
-  },
-  MONEY: {
-    name: 'MONEY', blurb: 'Day job, commercial work, service beats.', gives: '+Cash',
-    costs: { young: '−Taste', peak: '−Taste −Relevance', late: '−Taste −Relevance' },
-    level: { young: 2, peak: 4, late: 5 },
-  },
-  LIFE: {
-    name: 'LIFE', blurb: 'Rest, relationships, health.', gives: '+Taste +Connections',
-    costs: { young: 'Costs you nothing yet', peak: '−Relevance −Cash', late: '−Relevance −Cash' },
-    level: { young: 3, peak: 4, late: 5 },
-  },
-};
+export const TURNS = Array.from(
+  { length: END_AGE - START_AGE },
+  (_, i) => ({ age: START_AGE + i, span: 1, year: START_YEAR + i }),
+);
 
-const FOCUS_FX = {
-  // Relevance does not drain in the young band — at 16 nobody knows you
-  // either way. The drain starts in your twenties and bites in your forties.
-  // Taste is deliberately the slowest-moving number in the game.
-  CRAFT: {
-    young: { skill: 11, taste: 7, relevance: 0 },
-    peak: { skill: 8, taste: 6, relevance: -1 },
-    late: { skill: 5, taste: 5, relevance: -3 },
-  },
-  HUSTLE: {
-    young: { relevance: 12, connections: 10, skill: 2 },
-    peak: { relevance: 16, connections: 12, skill: 1 },
-    late: { relevance: 11, connections: 8, taste: -1 },
-  },
-  MONEY: {
-    young: (s) => ({ cash: 7000 + 40 * s.skill, skill: 3, taste: -3, relevance: 0 }),
-    peak: (s) => ({ cash: 40000 + 800 * s.skill + 250 * s.connections, skill: 2, taste: -4, relevance: -2 }),
-    late: (s) => ({ cash: 55000 + 1100 * s.skill + 400 * s.connections, taste: -4, relevance: -4 }),
-  },
-  LIFE: {
-    young: { taste: 5, connections: 4, skill: 1, relevance: 0 },
-    peak: { taste: 5, connections: 5, relevance: -2, cash: -6000 },
-    late: { taste: 5, connections: 5, relevance: -4, cash: -4000 },
-  },
-};
+/** Age 34 — the point the years start taking things back. */
+export const DECAY_START_TURN = 34 - START_AGE;
 
-const LIVING_COST = [0, 900, 3200, 7000, 34000, 34000, 34000, 34000, 56000, 56000, 56000, 56000];
-const ROYALTY_BASE = { 1: 0, 2: 1200, 3: 12000, 4: 55000, 5: 200000 };
+/**
+ * How often each class of card reaches the table.
+ *
+ * These are keyed by card class because there are no lanes any more. The
+ * previous shape was keyed by lane (ROOM / CIRCUIT / LONGSHOT) and outlived the
+ * system that read it: pickOne looks up CLASS_WEIGHTS[cls], which found nothing
+ * under the lane keys, so weightedPick fell back to its default weight of 1 and
+ * every class was equally likely. RARE cards were being dealt at roughly twice
+ * their intended rate.
+ */
+const CLASS_WEIGHTS = { COMMON: 52, CONTRACT: 24, RARE: 24 };
 
 const GRAMMY_CATEGORIES = [
   'Producer of the Year, Non-Classical',
@@ -101,15 +68,12 @@ export function emptyCabinet() {
     runs: 0,
     retirementAges: [],
     longestCareer: 0,
-    highestStatus: 0,
+    bestRating: 0,
     grammyWins: 0, grammyNoms: 0,
     oscarWins: 0, oscarNoms: 0,
     emmyWins: 0, emmyNoms: 0,
     certs: { gold: 0, platinum: 0, multi: 0, diamond: 0 },
     chartsLanded: [],   // Billboard chart categories ever placed in — one "#1 Producer" trophy each
-    whalesSeen: [],     // whale ids ever drawn
-    whalesTaken: [],    // whale ids ever accepted — retired from the deck
-    whalesPassed: [],
     artistsPlaced: [],  // roster artist names ever placed with, across all runs
     loyalProducer: [],  // artist names that hit the loyal-producer threshold in a single run
   };
@@ -117,36 +81,39 @@ export function emptyCabinet() {
 
 /** `seed` is optional and internal — the sim harness passes one, players never do. */
 export function createRun(cabinet, seed = newSeed()) {
+  // THE TALENT ROLL — the one thing decided before you play a note.
+  const talent = rollTalent(mulberry32(hashSeed(`${seed}|talent`)));
+  const prodigy = talent >= PRODIGY_AT;
+  const flags = new Set();
+  if (talent <= UNDERDOG_AT) flags.add('underdog');
   return {
     seed,
     cabinet,
     turn: 0,
     age: TURNS[0].age,
-    skill: 8, taste: 12, relevance: 0, connections: 2,
-    cash: 0,
-    publishing: 100,
-    royaltyMult: 1,
+    talent,
+    rating: talent,
+    prodigy,
+    plateaued: false,
+    plateauedAt: null,
     placements: [],
+    rackVisits: 0,     // drives the rack's diminishing return — see engine/rack.js
     maxPlacementTier: 0,
     undergroundCount: 0,
-    flags: new Set(),
+    flags,
     usedCards: new Set(),
     usedArtists: new Set(),
     diary: [],
     awards: { grammyNoms: 0, grammyWins: 0, oscarNoms: 0, oscarWins: 0, emmyNoms: 0, emmyWins: 0, list: [] },
     certs: { gold: 0, platinum: 0, multi: 0, diamond: 0 },
     pendingCerts: [],
-    status: 1,
-    maxStatus: 1,
-    brokeStreak: 0,
+    log: [],
+    offers: [],
     managerHonest: null,
-    phase: 'focus',
-    forcedFocus: null,
-    focus: null,
+    phase: 'choose',
     card: null,
     cast: null,
     report: null,
-    whalesSeenThisRun: [],
   };
 }
 
@@ -154,20 +121,13 @@ export function createRun(cabinet, seed = newSeed()) {
 /* EFFECTS                                                             */
 /* ------------------------------------------------------------------ */
 
-const CLAMPED = ['skill', 'taste', 'relevance', 'connections'];
-
-function applyFx(s, fxIn, opts = {}) {
+function applyFx(s, fxIn) {
   const fx = typeof fxIn === 'function' ? fxIn(s) : fxIn;
   if (!fx) return [];
   const events = [];
 
-  for (const k of [...CLAMPED, 'cash']) {
-    if (fx[k] === undefined) continue;
-    const v = fx[k];
-    s[k] = k === 'cash' ? Math.round(s[k] + v) : clamp(s[k] + v);
-  }
-  if (fx.publishing !== undefined) s.publishing = Math.max(0, Math.min(100, s.publishing + fx.publishing));
-  if (fx.royaltyMult !== undefined) s.royaltyMult = fx.royaltyMult === 0 ? 0 : s.royaltyMult * fx.royaltyMult;
+  if (fx.rating) events.push({ kind: 'rating', amount: fx.rating });
+  if (fx.ratingJump) events.push({ kind: 'ratingJump', amount: fx.ratingJump });
   if (fx.flags) fx.flags.forEach((f) => s.flags.add(f));
   if (fx.clearFlags) fx.clearFlags.forEach((f) => s.flags.delete(f));
 
@@ -189,16 +149,12 @@ function applyFx(s, fxIn, opts = {}) {
     if (!p.underground) s.maxPlacementTier = Math.max(s.maxPlacementTier, p.tier);
     if (p.underground) s.undergroundCount += 1;
     if (p.region !== 'US') {
-      s.relevance = clamp(s.relevance + 4);
-      events.push({ kind: 'territory', text: `Reach outside ${TERRITORY_NAME.US} — ${TERRITORY_NAME[p.region]}. +4 Relevance.` });
+      events.push({ kind: 'rating', amount: 2 });
+      events.push({ kind: 'territory', text: `Reach outside ${TERRITORY_NAME.US} — ${TERRITORY_NAME[p.region]}. +2 Overall.` });
     }
     events.push({ kind: 'placement', placement: p });
   }
   return events;
-}
-
-function clamp(v) {
-  return Math.max(0, Math.min(100, Math.round(v)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -206,13 +162,40 @@ function clamp(v) {
 /* ------------------------------------------------------------------ */
 
 function territoryOpen(s, region) {
-  return (TERRITORY_UNLOCK[region] || 9) <= s.status;
+  return (TERRITORY_UNLOCK[region] || 999) <= s.rating;
+}
+
+/**
+ * THE OPEN DOOR — how often a room at each tier is the room you get into.
+ *
+ * A card cast as `{ track: 'any' }` can name anybody in the game, which is the
+ * whole point of it: the studio invitation has to be able to be a kid from your
+ * neighbourhood or the biggest artist alive, off the same card. These weights
+ * are what makes the difference matter — a tier-1 room is eight times likelier
+ * than a tier-5 one, so the year Travis Scott's name comes up is a year you
+ * remember. Age still gates it through TIER_OPENS_AT: at sixteen the only door
+ * open is tier 1, and the top of the roster cannot appear at all until 31.
+ */
+const ANY_TIER_WEIGHT = { 1: 40, 2: 26, 3: 18, 4: 11, 5: 5 };
+
+/** The tiers a card cast as 'any' could reach at this age, with weights. */
+function openTiers(s) {
+  return Object.keys(ANY_TIER_WEIGHT)
+    .map(Number)
+    .filter((t) => s.age >= TIER_OPENS_AT[t])
+    .map((tier) => ({ tier, weight: ANY_TIER_WEIGHT[tier] }))
+    .filter(({ tier }) => (ROSTER[TIER_KEY_BY_LEVEL[tier]] || []).length);
 }
 
 function poolFor(s, cast) {
   if (!cast) return null;
   if (cast.track === 'underground') return ROSTER.underground_us;
   if (cast.track === 'director') return ROSTER.directors;
+  // 'any' is eligible as long as one tier is open — which tier is decided at
+  // cast time, not here, so the odds live in one place.
+  if (cast.track === 'any') {
+    return openTiers(s).flatMap(({ tier }) => ROSTER[TIER_KEY_BY_LEVEL[tier]] || []);
+  }
   const key = TIER_KEY_BY_LEVEL[cast.tier];
   let pool = ROSTER[key] || [];
   if (cast.region) pool = pool.filter((a) => a.region === cast.region);
@@ -221,6 +204,21 @@ function poolFor(s, cast) {
 }
 
 function castFor(s, card, rand) {
+  // 'any' rolls the tier first, so a tier-5 name stays rare no matter how many
+  // artists that tier holds. Everything else draws from a single fixed pool,
+  // where an even pick across the pool is already the right distribution.
+  if (card.cast && card.cast.track === 'any') {
+    const tiers = openTiers(s);
+    if (!tiers.length) return null;
+    const { tier } = weightedPick(tiers, rand);
+    const pool = ROSTER[TIER_KEY_BY_LEVEL[tier]] || [];
+    const fresh = pool.filter((a) => !s.usedArtists.has(a.name));
+    const use = fresh.length ? fresh : pool;
+    if (!use.length) return null;
+    // The tier rides along on the cast: a card written for 'any' has to size
+    // its own payoff, and the artist object is the only thing it is handed.
+    return { ...use[Math.floor(rand() * use.length)], tier };
+  }
   const pool = poolFor(s, card.cast);
   if (!pool) return null;
   const fresh = pool.filter((a) => !s.usedArtists.has(a.name));
@@ -236,42 +234,70 @@ function meets(s, card) {
     if (Array.isArray(req)) return val >= req[0] && val <= req[1];
     return val >= req;
   };
-  if (!check(s.skill, r.skill)) return false;
-  if (!check(s.taste, r.taste)) return false;
-  if (!check(s.relevance, r.relevance)) return false;
-  if (!check(s.connections, r.connections)) return false;
-  if (!check(s.cash, r.cash)) return false;
+  if (!check(s.rating, r.rating)) return false;
   if (!check(s.age, r.age)) return false;
-  if (!check(s.status, r.status)) return false;
   if (r.flags && !r.flags.every((f) => s.flags.has(f))) return false;
   if (r.not && r.not.some((f) => s.flags.has(f))) return false;
   if (card.cast) {
     const pool = poolFor(s, card.cast);
     if (!pool || !pool.length) return false;
+    // Nobody gets handed a global icon at seventeen, however gifted they are.
+    // Rating alone cannot express this — a 75-talent sixteen-year-old has the
+    // ability and none of the career — so the reach is gated on age centrally
+    // rather than by editing a tier floor into every card.
+    if (card.cast.tier && s.age < TIER_OPENS_AT[card.cast.tier]) return false;
   }
   return true;
 }
 
-function drawCard(s, rand) {
-  const eligible = CARDS.filter((c) => {
-    if (s.usedCards.has(c.id)) return false;
-    if (c.cls === 'WHALE' && s.cabinet.whalesTaken.includes(c.id)) return false; // once per account
-    return meets(s, c);
-  });
-  if (!eligible.length) return null;
+/** The earliest age each roster tier will work with you at all. */
+const TIER_OPENS_AT = { 1: 16, 2: 19, 3: 23, 4: 27, 5: 31 };
 
-  // A promised payoff (the manager audit) never waits on a die roll.
-  const forced = eligible.find((c) => (c.weight || 1) >= 9);
-  if (forced) return forced;
+const placementTier = (c) => (c.accept && c.accept.fx && c.accept.fx.placement
+  ? c.accept.fx.placement.tier : 0);
 
-  const byClass = { WHALE: [], RARE: [], CONTRACT: [], COMMON: [] };
-  eligible.forEach((c) => byClass[c.cls].push(c));
-  const classWeights = { WHALE: 26, RARE: 24, CONTRACT: 20, COMMON: 40 };
+function eligibleCards(s) {
+  return CARDS.filter((c) => !s.usedCards.has(c.id) && meets(s, c));
+}
+
+function pickOne(pool, rand) {
+  const byClass = { RARE: [], CONTRACT: [], COMMON: [] };
+  pool.forEach((c) => byClass[c.cls].push(c));
   const options = Object.keys(byClass)
     .filter((k) => byClass[k].length)
-    .map((k) => ({ k, weight: classWeights[k] }));
+    .map((k) => ({ k, weight: CLASS_WEIGHTS[k] || 1 }));
+  if (!options.length) return null;
   const chosen = weightedPick(options, rand).k;
   return weightedPick(byClass[chosen], rand, (c) => c.weight || 1);
+}
+
+/** The two offers for a year. Never the same card twice. */
+function drawOffers(s, rand) {
+  const pool = eligibleCards(s);
+  if (!pool.length) return [];
+
+  // A good night at the rack is a lead, not a number: the year after it, one of
+  // the two offers is guaranteed to be a credit. Consumed on the next draw
+  // whether or not you take the credit — the lead goes cold either way.
+  if (s.flags.has('hot_hands')) {
+    s.flags.delete('hot_hands');
+    const credits = pool.filter((c) => placementTier(c));
+    if (credits.length) {
+      const lead = weightedPick(credits, rand, (c) => c.weight || 1);
+      const rest = pool.filter((c) => c.id !== lead.id);
+      const other = rest.length ? pickOne(rest, rand) : null;
+      return other ? [lead, other] : [lead];
+    }
+  }
+
+  // A promised payoff (the manager audit) never waits on a die roll — it takes
+  // the first slot outright.
+  const forced = pool.find((c) => (c.weight || 1) >= 9 && !placementTier(c));
+  const first = forced || pickOne(pool, rand);
+  if (!first) return [];
+  const rest = pool.filter((c) => c.id !== first.id);
+  const second = rest.length ? pickOne(rest, rand) : null;
+  return second ? [first, second] : [first];
 }
 
 /* ------------------------------------------------------------------ */
@@ -282,68 +308,115 @@ function turnRand(s, salt) {
   return mulberry32(hashSeed(`${s.seed}|${s.turn}|${salt}`));
 }
 
-export function setFocus(s, focus) {
-  s.focus = focus;
+/** Deal the year's two offers. */
+export function beginYear(s) {
   const rand = turnRand(s, 'deck');
-  const card = drawCard(s, rand);
-  s.card = card;
-  s.cast = card ? castFor(s, card, rand) : null;
-  if (card && card.cls === 'WHALE') {
-    s.whalesSeenThisRun.push(card.id);
-  }
-  s.phase = 'card';
+  s.offers = drawOffers(s, rand).map((card) => ({
+    card,
+    cast: castFor(s, card, mulberry32(hashSeed(`${s.seed}|${s.turn}|cast|${card.id}`))),
+  }));
+  s.phase = s.offers.length ? 'choose' : 'resolve-empty';
+  if (!s.offers.length) return resolveYear(s, -1);
   return s;
 }
 
-export function resolveTurn(s, choice) {
+/** True when taking this offer means playing The Rack before the year resolves. */
+export const offerIsRack = (o) => !!(o && o.card && o.card.rack);
+
+/**
+ * The odds printed on a yellow card, as a 0–1 chance, or null if it is green.
+ *
+ * A card may state a flat number or work them out from who it cast — the studio
+ * invitation is the same card whether the room belongs to a kid from your
+ * neighbourhood or the biggest artist alive, and it should not be the same bet.
+ * Both the offer screen and the resolver read the odds through here, so what
+ * the player is shown is by construction the number that gets rolled.
+ */
+export function gambleChance(card, cast) {
+  if (!card || !card.gamble) return null;
+  const c = card.gamble.chance;
+  return typeof c === 'function' ? c(cast) : c;
+}
+
+/**
+ * Commit the year. `pick` is the index of the chosen offer, or -1 for a year
+ * where nothing was on the table.
+ *
+ * `extra.rack` carries the result of a rack session for a rack offer. It is the
+ * one thing the engine cannot decide on its own — it is what the player did —
+ * so the screen plays the session first and hands the result back here.
+ */
+export function resolveYear(s, pick, extra = {}) {
   const rand = turnRand(s, 'resolve');
-  const before = snapshotStats(s);
-  const statusFrom = s.status;
-  const band = bandOf(s.age);
   const events = [];
-  const hadPlacementsBefore = s.placements.length;
+  const offers = s.offers || [];
+  const taken = pick >= 0 ? offers[pick] : null;
 
-  // 1. focus
-  events.push(...applyFx(s, FOCUS_FX[s.focus][band]));
+  // Every offer dealt this year leaves the deck, taken or not. Passing on
+  // something is the cost of taking the other thing.
+  offers.forEach((o) => { if (!o.card.repeatable) s.usedCards.add(o.card.id); });
 
-  // 2. the card
   let cardLine = null;
-  if (s.card && choice !== 'none') {
-    const branch = choice === 'accept' ? s.card.accept : s.card.pass;
-    s.usedCards.add(s.card.id);
-    if (s.cast) s.usedArtists.add(s.cast.name);
-    events.push(...applyFx(s, branch.fx));
-    if (branch.diary) cardLine = fill(branch.diary, { artist: s.cast ? s.cast.name : 'them', age: s.age });
-    if (s.card.cls === 'WHALE') {
-      const list = choice === 'accept' ? 'whalesTaken' : 'whalesPassed';
-      if (!s.cabinet[list].includes(s.card.id)) s.cabinet[list].push(s.card.id);
-      if (!s.cabinet.whalesSeen.includes(s.card.id)) s.cabinet.whalesSeen.push(s.card.id);
+  let action = 'A quiet year';
+  let rack = null;
+  let gamble = null;
+  if (taken) {
+    s.card = taken.card;
+    s.cast = taken.cast;
+    action = taken.card.title;
+    if (taken.cast) s.usedArtists.add(taken.cast.name);
+
+    // THE GAMBLE. A yellow card states its odds on its face and then rolls
+    // them. This is the one place the game rolls dice on a choice the player
+    // made — everywhere else the only randomness is which cards are dealt —
+    // and it is declared to the player before they commit, which is what makes
+    // it a gamble rather than a trick.
+    if (taken.card.gamble) {
+      const chance = gambleChance(taken.card, taken.cast);
+      const won = turnRand(s, `gamble|${taken.card.id}`)() < chance;
+      gamble = { won, chance };
+      if (!won) {
+        const fail = taken.card.fail || {};
+        events.push(...applyFx(s, fail.fx));
+        if (fail.diary) {
+          cardLine = fill(fail.diary, { artist: taken.cast ? taken.cast.name : 'them', age: s.age });
+        }
+      }
     }
-    if (choice === 'accept' && s.flags.has('manager_pending') && s.managerHonest === null) {
-      s.managerHonest = rand() < 0.55; // rolled at signing, revealed in six years
+    if (taken.card.rack) {
+      // The rack pays out on the session, not on the card. Scored before the
+      // visit is counted so the first visit is scored as the first visit.
+      rack = scoreRackVisit(extra.rack, s.rackVisits);
+      s.rackVisits += 1;
+      if (rack.rating) events.push({ kind: 'rating', amount: rack.rating });
+      if (rack.hotHands) s.flags.add('hot_hands');
     }
+    // A lost gamble has already paid out its own consequences above; the
+    // accept effects are what you were reaching for and do not land.
+    if (!gamble || gamble.won) {
+      events.push(...applyFx(s, taken.card.accept.fx));
+      if (taken.card.accept.diary) {
+        cardLine = fill(taken.card.accept.diary, { artist: taken.cast ? taken.cast.name : 'them', age: s.age });
+      }
+    }
+    if (s.flags.has('manager_pending') && s.managerHonest === null) {
+      s.managerHonest = rand() < 0.55; // rolled at signing, revealed years later
+    }
+  } else {
+    s.card = null; s.cast = null;
   }
 
-  // 3. royalties from earlier placements
-  const income = royaltyIncome(s);
-  s.cash += income;
-
-  // 4. the cost of being alive
-  const costs = LIVING_COST[s.turn];
-  s.cash -= costs;
-
-  // 5. relevance decay — after 34 the world starts taking it back
+  // 3. after 34 the world starts taking it back
   let decay = 0;
   if (s.turn >= DECAY_START_TURN) {
     const madeSomething = s.placements.some((p) => p.turn === s.turn);
-    decay = madeSomething ? 4 : 7;
-    s.relevance = clamp(s.relevance - decay);
+    decay = madeSomething ? 0 : 1;
   }
 
-  // 6. certifications land one to two turns after the placement
+  // 4. certifications land one to two turns after the placement
   const certEvents = resolveCertifications(s, rand);
 
-  // 7. queue certifications for anything made this turn
+  // 5. queue certifications for anything made this turn
   s.placements
     .filter((p) => p.turn === s.turn && p.tier >= 2 && !p.underground && !p.certQueued)
     .forEach((p) => {
@@ -351,10 +424,10 @@ export function resolveTurn(s, choice) {
       s.pendingCerts.push({ tier: p.tier, artist: p.artist, resolveTurn: s.turn + (rand() < 0.5 ? 1 : 2) });
     });
 
-  // 8. awards
+  // 6. awards
   const awardEvents = resolveAwards(s, rand);
 
-  // 9. the manager reveal, six years on
+  // 7. the manager reveal, six years on
   if (s.flags.has('manager_pending')) {
     if (!s.managerRevealTurn) s.managerRevealTurn = s.turn + 2;
     else if (s.turn >= s.managerRevealTurn) {
@@ -363,87 +436,135 @@ export function resolveTurn(s, choice) {
     }
   }
 
-  // 10. status
-  s.status = cappedStatus(s);
-  if (s.status > s.maxStatus) s.maxStatus = s.status;
+  // 8. the rating moves — one whole-number move for the whole year.
+  //    Everything that happened this turn queued a `rating` event; the lot is
+  //    summed, scaled by prodigy/plateau growth and the ceiling, and rounded.
+  const ratingBefore = s.rating;
+  const earned = [...events, ...certEvents, ...awardEvents]
+    .reduce((a, e) => a + (e.kind === 'rating' ? e.amount : 0), 0);
+  applyRating(s, earned - decay);
+  // A jump is a card handing you a career in one turn — it bypasses scaling.
+  const jump = ratingJumpFrom(events);
+  if (jump) s.rating = Math.max(0, Math.min(99, s.rating + jump));
+  const ratingMove = s.rating - ratingBefore;
 
-  // 11. money trouble
-  if (s.cash < 0) s.brokeStreak += 1;
-  else s.brokeStreak = 0;
+  // 9. THE PLATEAU — the prodigy who simply stops. Rolled once per turn from
+  //    turn 3 on, and permanent when it lands.
+  let plateauedNow = false;
+  if (s.prodigy && !s.plateaued && s.turn >= PLATEAU_FROM_TURN
+      && turnRand(s, 'plateau')() < PLATEAU_CHANCE) {
+    s.plateaued = true;
+    s.plateauedAt = s.age;
+    plateauedNow = true;
+  }
 
-  // 12. the diary line
-  let condition = null;
-  if (s.cash < 0) condition = 'broke';
-  else if (s.status < statusFrom) condition = 'demoted';
-  else if (s.status > statusFrom) condition = 'promoted';
-  else if (hadPlacementsBefore === 0 && s.placements.length > 0) condition = 'firstPlacement';
-  const line = writeDiaryLine({ focus: s.focus, age: s.age, cardLine, condition }, turnRand(s, 'diary'));
+  // 10. the year's line in the log
+  const plaques = { gold: 0, platinum: 0, multi: 0, diamond: 0 };
+  certEvents.forEach((e) => { if (e.level) plaques[e.level] += 1; });
+  const awards = {};
+  awardEvents.forEach((e) => {
+    if (!e.won) return;
+    const k = e.kind === 'GRAMMY' ? 'GRM' : e.kind === 'OSCAR' ? 'OSC' : 'EMY';
+    awards[k] = (awards[k] || 0) + 1;
+  });
+  const madeThisYear = s.placements.filter((p) => p.turn === s.turn);
+  const entry = {
+    year: TURNS[s.turn].year,
+    age: s.age,
+    action,
+    plaques,
+    awards: Object.entries(awards).map(([type, count]) => ({ type, count })),
+    outcome: rack ? rackOutcome(rack)
+      : yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }),
+    valence: rack && rack.hotHands ? 'standout'
+      : yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }),
+  };
+  s.log.push(entry);
+
+  const line = writeDiaryLine({ age: s.age, cardLine, condition: null }, turnRand(s, 'diary'));
   s.diary.push({ age: s.age, text: line.text, weight: line.weight });
 
   s.report = {
     age: s.age,
-    span: TURNS[s.turn].span,
-    focus: s.focus,
+    year: TURNS[s.turn].year,
     card: s.card,
     cast: s.cast,
-    choice,
-    deltas: diffStats(before, snapshotStats(s)),
+    pick,
+    passed: offers.filter((_, i) => i !== pick).map((o) => o.card),
+    ratingMove,
+    ratingJump: jump,
+    rack,
+    gamble,
+    plateauedNow,
     diary: line.text,
-    statusFrom,
-    statusTo: s.status,
-    income,
-    costs,
     decay,
+    entry,
     events,
     certEvents,
     awardEvents,
   };
+  s.offers = [];
   s.phase = 'resolve';
   return s;
+}
+
+/** One short sentence for the log's HOW IT LANDED column. */
+function yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }) {
+  const plaqueCount = Object.values(plaques).reduce((a, b) => a + b, 0);
+  const awardCount = Object.values(awards).reduce((a, b) => a + b, 0);
+  if (jump > 0) return 'Everything changed.';
+  // A lost bet is the loudest thing that can happen in a year — it gets said
+  // before any of the ordinary readings below.
+  if (gamble && !gamble.won) return 'You called it wrong.';
+  if (plateauedNow) return 'Something levelled off.';
+  if (awardCount) return awardCount > 1 ? 'They called your name twice.' : 'They called your name.';
+  if (plaqueCount) return plaqueCount > 1 ? 'Plaques on the wall.' : 'It got certified.';
+  if (madeThisYear.length) {
+    const p = madeThisYear[0];
+    if (p.underground) return 'Nobody heard it. It mattered.';
+    return p.tier >= 4 ? 'It was everywhere.' : 'A credit, at least.';
+  }
+  if (!taken) return 'Nothing came.';
+  if (ratingMove < 0) return 'It cost you.';
+  if (ratingMove === 0) return 'The year went nowhere.';
+  return ratingMove >= 3 ? 'It worked.' : 'A little better.';
+}
+
+function yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }) {
+  const awardCount = Object.values(awards).reduce((a, b) => a + b, 0);
+  if (jump > 0 || awardCount || plaques.diamond) return 'standout';
+  if (gamble && !gamble.won) return 'setback';
+  if (plateauedNow || ratingMove < 0) return 'setback';
+  if (madeThisYear.length || plaques.gold || plaques.platinum || ratingMove >= 3) return 'good';
+  return 'neutral';
 }
 
 export function advance(s) {
   s.turn += 1;
   if (s.turn >= TURNS.length) return retire(s, false);
   s.age = TURNS[s.turn].age;
-  s.focus = null;
   s.card = null;
   s.cast = null;
-  s.forcedFocus = s.brokeStreak >= 2 ? 'MONEY' : null;
-  s.phase = 'focus';
-  return s;
+  return beginYear(s);
 }
 
-function cappedStatus(s) {
-  const st = computeStatus(s);
-  return s.flags.has('ceiling_capped') ? Math.min(st, 5) : st;
+/** Cards may carry an outright rating jump on top of their stat movement. */
+function ratingJumpFrom(events) {
+  return events.reduce((a, e) => a + (e.kind === 'ratingJump' ? e.amount : 0), 0);
 }
 
-function royaltyIncome(s) {
-  let total = 0;
-  for (const p of s.placements) {
-    const since = s.turn - p.turn;
-    if (since < 1) continue;
-    let base = ROYALTY_BASE[p.tier] || 0;
-    if (p.underground) base *= 0.03;
-    if (p.score) base *= 1.25;
-    total += base * Math.pow(0.62, since - 1);
-  }
-  total *= s.royaltyMult * (0.5 + s.publishing / 200);
-  return Math.round(total);
-}
 
 function resolveCertifications(s, rand) {
   const out = [];
   const still = [];
   for (const q of s.pendingCerts) {
     if (q.resolveTurn > s.turn) { still.push(q); continue; }
-    const boost = s.relevance / 500;
+    const boost = s.rating / 900;
     const table = {
       2: { gold: 0.25 },
       3: { gold: 0.6, platinum: 0.2 },
       4: { gold: 0.85, platinum: 0.5, multi: 0.15 },
-      5: { gold: 0.97, platinum: 0.8, multi: 0.4, diamond: 0.095 },
+      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.04 },
     }[q.tier] || {};
     const u = rand() - boost;
     let level = null;
@@ -453,7 +574,7 @@ function resolveCertifications(s, rand) {
     else if (table.gold !== undefined && u < table.gold) level = 'gold';
     if (level) {
       s.certs[level] += 1;
-      s.relevance = clamp(s.relevance + { gold: 2, platinum: 4, multi: 7, diamond: 12 }[level]);
+      out.push({ kind: 'rating', amount: { gold: 1, platinum: 2, multi: 3, diamond: 5 }[level] });
       out.push({ level, artist: q.artist, tier: q.tier });
     }
   }
@@ -466,19 +587,16 @@ function resolveAwards(s, rand) {
   const thisTurn = s.placements.filter((p) => p.turn === s.turn);
 
   // A nomination is worth something on its own. A win moves the needle.
-  const credit = (won) => {
-    s.relevance = clamp(s.relevance + (won ? 6 : 2));
-    if (won) s.taste = clamp(s.taste + 2);
-  };
+  const credit = (won) => { out.push({ kind: 'rating', amount: won ? 3 : 1 }); };
 
   for (const p of thisTurn) {
     // GRAMMY
-    if (!p.underground && p.tier >= 3 && s.taste >= 60) {
-      const noms = 1 + (p.tier >= 5 && s.taste >= 70 ? 1 : 0);
+    if (!p.underground && p.tier >= 3 && s.rating >= 90) {
+      const noms = 1 + (p.tier >= 5 && s.rating >= 96 ? 1 : 0);
       for (let i = 0; i < noms; i++) {
         const cat = GRAMMY_CATEGORIES[Math.floor(rand() * GRAMMY_CATEGORIES.length)];
         s.awards.grammyNoms += 1;
-        let win = 0.1 + s.taste / 400 + s.relevance / 500 + (p.tier - 3) * 0.08;
+        let win = 0.05 + (s.rating - 88) / 300 + (p.tier - 3) * 0.06;
         if (s.flags.has('campaigning')) win += 0.12;
         if (s.flags.has('album_credit')) win += 0.05;
         const won = rand() < Math.min(0.7, win);
@@ -489,18 +607,18 @@ function resolveAwards(s, rand) {
       }
     }
     // OSCAR — features only
-    if (p.score && !p.tv && s.taste >= 70) {
+    if (p.score && !p.tv && s.rating >= 88) {
       s.awards.oscarNoms += 1;
-      const won = rand() < Math.min(0.6, 0.18 + (s.taste + s.skill - 140) / 300);
+      const won = rand() < Math.min(0.6, 0.18 + (s.rating - 78) / 150);
       if (won) s.awards.oscarWins += 1;
       credit(won);
       s.awards.list.push({ kind: 'OSCAR', category: 'Best Original Score', age: s.age, won, artist: p.artist });
       out.push({ kind: 'OSCAR', category: 'Best Original Score', won, artist: p.artist });
     }
     // EMMY — television
-    if (p.tv && s.taste >= 55) {
+    if (p.tv && s.rating >= 84) {
       s.awards.emmyNoms += 1;
-      const won = rand() < Math.min(0.6, 0.22 + s.taste / 300);
+      const won = rand() < Math.min(0.6, 0.22 + s.rating / 350);
       if (won) s.awards.emmyWins += 1;
       credit(won);
       s.awards.list.push({ kind: 'EMMY', category: 'Outstanding Music Composition', age: s.age, won, artist: p.artist });
@@ -524,10 +642,12 @@ export function retire(s, voluntary) {
     age,
     years: age - 14,
     voluntary,
-    status: s.status,
     maxStatus: s.maxStatus,
-    skill: s.skill, taste: s.taste, relevance: s.relevance,
-    connections: s.connections, cash: s.cash,
+    talent: s.talent,
+    rating: s.rating,
+    prodigy: s.prodigy,
+    plateaued: s.plateaued,
+    plateauedAt: s.plateauedAt,
     flags: s.flags,
     placements: s.placements,
     maxPlacementTier: s.maxPlacementTier,
@@ -559,14 +679,12 @@ export function retire(s, voluntary) {
 
 export function scoreRun(r) {
   let n = 0;
-  n += r.status * 900;
-  n += r.taste * 22 + r.skill * 14 + r.relevance * 16 + r.connections * 8;
+  n += r.rating * 60;
   n += r.placements.reduce((a, p) => a + [0, 40, 180, 700, 2400, 8000][p.tier], 0);
   n += r.awards.grammyWins * 2500 + r.awards.grammyNoms * 600;
   n += r.awards.oscarWins * 4000 + r.awards.oscarNoms * 1000;
   n += r.awards.emmyWins * 2000 + r.awards.emmyNoms * 500;
   n += r.certs.gold * 300 + r.certs.platinum * 900 + r.certs.multi * 2200 + r.certs.diamond * 9000;
-  n += Math.max(0, Math.round(r.cash / 4000));
   if (r.architect) n += 6000;
   if (r.voluntary) n += 1200;
   return Math.max(0, Math.round(n));
@@ -587,22 +705,15 @@ export function topPlacements(placements) {
 
 /* ------------------------------------------------------------------ */
 
-function snapshotStats(s) {
-  return { skill: s.skill, taste: s.taste, relevance: s.relevance, connections: s.connections, cash: s.cash };
-}
 
-function diffStats(a, b) {
-  const out = {};
-  for (const k of Object.keys(a)) out[k] = b[k] - a[k];
-  return out;
-}
+
 
 export function mergeIntoCabinet(cabinet, s) {
   const c = { ...cabinet, certs: { ...cabinet.certs } };
   c.runs += 1;
   c.retirementAges = [...c.retirementAges, s.retiredAge];
   c.longestCareer = Math.max(c.longestCareer, s.retiredAge - 14);
-  c.highestStatus = Math.max(c.highestStatus, s.status);
+  c.bestRating = Math.max(c.bestRating || 0, s.rating);
   c.grammyWins += s.awards.grammyWins;
   c.grammyNoms += s.awards.grammyNoms;
   c.oscarWins += s.awards.oscarWins;
@@ -614,9 +725,6 @@ export function mergeIntoCabinet(cabinet, s) {
   const chartsThisRun = s.placements.map((p) => NAME_TO_CHART.get(p.artist)).filter(Boolean);
   c.chartsLanded = [...new Set([...(c.chartsLanded || []), ...chartsThisRun])];
 
-  c.whalesSeen = [...new Set([...c.whalesSeen, ...s.whalesSeenThisRun])];
-  c.whalesTaken = [...new Set(s.cabinet.whalesTaken)];
-  c.whalesPassed = [...new Set(s.cabinet.whalesPassed)];
 
   const placedNames = s.placements.map((p) => p.artist).filter((n) => ROSTER_ARTIST_NAMES.has(n));
   c.artistsPlaced = [...new Set([...(c.artistsPlaced || []), ...placedNames])];
@@ -628,12 +736,11 @@ export function mergeIntoCabinet(cabinet, s) {
 }
 
 export function shareText(s) {
-  const st = s.status;
   const a = s.awards;
   const cz = s.certs;
   const lines = [];
   lines.push('BASEMENT');
-  lines.push(`14 → ${s.retiredAge} · ${['', 'BEDROOM', 'LOCAL', 'KNOWN', 'NATIONAL', 'INTERNATIONAL', 'LEGENDARY'][st]}`);
+  lines.push(`16 → ${s.retiredAge} · OVR ${s.rating}`);
   const bits = [];
   if (a.grammyWins || a.grammyNoms) bits.push(`GRAMMY ${a.grammyWins}/${a.grammyNoms}`);
   if (a.oscarWins || a.oscarNoms) bits.push(`OSCAR ${a.oscarWins}/${a.oscarNoms}`);

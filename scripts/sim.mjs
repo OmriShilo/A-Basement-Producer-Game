@@ -1,165 +1,153 @@
 /**
  * Headless balance harness. `node scripts/sim.mjs [runs]`
  *
- * Plays a spread of archetype strategies and reports the distribution of
- * status tiers, awards, and plaques. Run it before touching any number in
- * game.js — the goal is that no status tier is unreachable and no tier is
- * the default.
+ * One turn is one year. Each year deals two offers and the strategy takes one.
+ * There are no tiers any more, so what matters is the spread of final OVR and
+ * whether every card still reaches the table.
  */
-import { createRun, setFocus, resolveTurn, advance, retire, emptyCabinet } from '../src/engine/game.js';
+import { createRun, beginYear, resolveYear, advance, retire, emptyCabinet, TURNS, offerIsRack, gambleChance } from '../src/engine/game.js';
 import { CARDS } from '../src/content/cards.js';
-import { STATUS } from '../src/engine/status.js';
 
-const N = Number(process.argv[2] || 4000);
-
-function rand(n) {
-  const x = Math.sin(n * 12.9898) * 43758.5453;
-  return x - Math.floor(x);
+/**
+ * What a player actually gets out of a session at the rack.
+ *
+ * The engine cannot roll this — it is the one outcome decided by hand — so the
+ * harness stands in three kinds of player. The mix matters more than the exact
+ * numbers: if the rack only balances for someone who farms chords, it is a
+ * trap for everyone else, and if it only balances for someone who noodles, it
+ * is not worth building.
+ */
+const RACK_PLAYERS = {
+  idle:     { chords: [0, 2], insts: 1 },   // clicked around, left
+  ordinary: { chords: [3, 7], insts: 3 },   // played properly for a bit
+  digger:   { chords: [9, 16], insts: 5 },  // went looking for chords
+};
+const RACK_MIX = ['idle', 'ordinary', 'ordinary', 'digger'];
+function rackSession(i, t) {
+  const p = RACK_PLAYERS[RACK_MIX[(i + t) % RACK_MIX.length]];
+  const [lo, hi] = p.chords;
+  return {
+    chordsFound: lo + Math.floor(rnd(i * 7 + t * 3) * (hi - lo + 1)),
+    instrumentsPlayed: p.insts,
+    notesPlayed: 0,
+  };
 }
 
-/** focus(s) · accept(s, card) · stop(s) */
-const STRATEGIES = {
-  balanced: {
-    focus: (s) => (s.turn % 4 === 3 ? 'LIFE' : ['CRAFT', 'HUSTLE', 'CRAFT', 'HUSTLE', 'MONEY'][s.turn % 5]),
-    accept: (s, c, i) => rand(i * 13 + s.turn) < 0.6,
-    stop: () => false,
-  },
-  climber: {
-    // plays toward the ladder: shore up whichever requirement is furthest behind
-    focus: (s) => {
-      if (s.turn % 4 === 3) return 'LIFE';
-      if (s.cash < 0) return 'MONEY';
-      if (s.turn < 3) return 'CRAFT';
-      if (s.skill < 45) return 'CRAFT';
-      if (s.taste < s.relevance - 15) return 'CRAFT';
-      return 'HUSTLE';
-    },
-    accept: (s, c) => !!(c.accept.fx && (typeof c.accept.fx === 'function' || c.accept.fx.placement || c.accept.fx.relevance > 0)),
-    stop: () => false,
-  },
-  purist: {
-    focus: (s) => (s.turn % 4 === 3 ? 'LIFE' : s.cash < 0 ? 'MONEY' : 'CRAFT'),
-    accept: (s, c) => !!(c.accept.fx && typeof c.accept.fx !== 'function' && (c.accept.fx.taste || 0) >= 0),
-    stop: () => false,
-  },
-  undergrounder: {
-    focus: (s) => (s.turn % 4 === 3 ? 'LIFE' : s.cash < 0 ? 'MONEY' : 'CRAFT'),
-    accept: (s, c) => c.id.includes('underground') || (typeof c.accept.fx !== 'function' && (c.accept.fx.taste || 0) > 3),
-    stop: () => false,
-  },
-  // proves THE LEGEND is reachable: climbs, then actually stops at the top
-  legendhunter: {
-    focus: (s) => {
-      if (s.turn % 5 === 4) return 'LIFE';
-      if (s.cash < 0) return 'MONEY';
-      if (s.status < 3) return s.skill < 40 ? 'CRAFT' : s.relevance < 25 ? 'HUSTLE' : 'CRAFT';
-      if (s.status < 4) return s.relevance < 45 ? 'HUSTLE' : 'CRAFT';
-      if (s.status < 5) return s.taste < 50 ? 'CRAFT' : 'HUSTLE';
-      if (s.status < 6) return s.taste < 75 ? 'CRAFT' : 'HUSTLE';
-      return 'LIFE';
-    },
-    accept: (s, c) => !!(c.accept.fx && (typeof c.accept.fx === 'function' || c.accept.fx.placement || (c.accept.fx.taste || 0) > 0 || (c.accept.fx.relevance || 0) > 0)),
-    stop: (s) => s.status >= 6,
-  },
-  chaser: {
-    focus: (s) => (s.turn % 5 === 0 ? 'LIFE' : 'HUSTLE'),
-    accept: (s, c, i) => rand(i * 5 + s.turn) < 0.75,
-    stop: () => false,
-  },
-  moneyman: {
-    focus: (s) => (s.turn % 4 === 3 ? 'LIFE' : 'MONEY'),
-    accept: (s, c) => typeof c.accept.fx === 'function' || (c.accept.fx.cash || 0) > 0,
-    stop: () => false,
-  },
-  quitter: {
-    focus: (s) => (s.turn < 2 ? 'CRAFT' : 'MONEY'),
-    accept: (s, c, i) => rand(i * 3 + s.turn) < 0.5,
-    stop: (s, i) => s.turn >= 2 + Math.floor(rand(i) * 6),
-  },
-  earlyout: {
-    focus: (s) => (s.turn % 4 === 3 ? 'LIFE' : s.turn % 2 ? 'HUSTLE' : 'CRAFT'),
-    accept: (s, c, i) => rand(i * 11 + s.turn) < 0.65,
-    stop: (s, i) => s.turn >= 6 + Math.floor(rand(i * 2) * 5),
-  },
+const N = Number(process.argv[2] || 4000);
+const rnd = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+
+/* Cards whose payoff depends on who they cast declare `fx` as a function, so
+   it has to be resolved against the offer before it can be compared — reading
+   `.rating` straight off a function yields undefined, which scored every such
+   card as worthless and made the greedy strategy systematically pass on the
+   biggest card in the deck. Gambles are valued at their expected return. */
+const fxOf = (o) => {
+  const fx = o.card.accept.fx;
+  return typeof fx === 'function' ? fx({ cast: o.cast }) : fx;
+};
+const worth = (fx) => (fx.rating || 0) + (fx.ratingJump || 0) + ((fx.placement || {}).tier || 0) * 2;
+const best = (o) => {
+  const chance = gambleChance(o.card, o.cast);
+  return worth(fxOf(o)) * (chance === null ? 1 : chance);
 };
 
+const STRATEGIES = {
+  greedy:   (offers) => (best(offers[0]) >= best(offers[1] || offers[0]) ? 0 : 1),
+  credits:  (offers) => {
+    const i = offers.findIndex((o) => fxOf(o).placement);
+    return i >= 0 ? i : 0;
+  },
+  coinflip: (offers, i, t) => (rnd(i * 13 + t) < 0.5 ? 0 : 1),
+  first:    () => 0,
+  second:   (offers) => (offers.length > 1 ? 1 : 0),
+};
+const RETIRE_AT = { greedy: 99, credits: 99, coinflip: 99, first: 99, second: 34 };
+
 const names = Object.keys(STRATEGIES);
-const statuses = {};
-const byStrategy = {};
-const whaleSeen = {};
 const cardSeen = {};
-let architects = 0, diamonds = 0, oscars = 0, emmys = 0, grammyW = 0, grammyN = 0;
-let totalCash = 0, negEnd = 0;
+const finals = [];
+let diamonds = 0, grammyW = 0, grammyN = 0, oscars = 0, emmys = 0, architects = 0;
+let prodigies = 0, plateaus = 0, emptyYears = 0, totalYears = 0;
+let rackOffered = 0, rackTaken = 0;
+let gambleOffered = 0, gambleTaken = 0, gambleWon = 0;
+const jumpYears = [];
+const rackVisitCounts = [];
 const errors = [];
 
 for (let i = 0; i < N; i++) {
-  const stratName = names[i % names.length];
-  const strat = STRATEGIES[stratName];
+  const name = names[i % names.length];
   const s = createRun(emptyCabinet(), `sim-${i}`);
+  if (s.prodigy) prodigies++;
   try {
-    while (s.phase !== 'end') {
-      if (strat.stop(s, i)) { retire(s, true); break; }
-      setFocus(s, s.forcedFocus || strat.focus(s));
-      if (s.card) {
-        cardSeen[s.card.id] = (cardSeen[s.card.id] || 0) + 1;
-        if (s.card.cls === 'WHALE') whaleSeen[s.card.id] = (whaleSeen[s.card.id] || 0) + 1;
-        resolveTurn(s, strat.accept(s, s.card, i) ? 'accept' : 'pass');
-      } else resolveTurn(s, 'none');
-      advance(s);
+    beginYear(s);
+    let t = 0;
+    while (s.phase !== 'end' && t < TURNS.length + 2) {
+      if (t >= RETIRE_AT[name]) { retire(s, true); break; }
+      if (!s.offers.length) emptyYears++;
+      s.offers.forEach((o) => { cardSeen[o.card.id] = (cardSeen[o.card.id] || 0) + 1; });
+      const pick = s.offers.length ? STRATEGIES[name](s.offers, i, t) : -1;
+      const isRack = pick >= 0 && offerIsRack(s.offers[pick]);
+      if (s.offers.some(offerIsRack)) rackOffered++;
+      if (isRack) rackTaken++;
+      if (s.offers.some((o) => gambleChance(o.card, o.cast) !== null)) gambleOffered++;
+      const tookGamble = pick >= 0 && gambleChance(s.offers[pick].card, s.offers[pick].cast) !== null;
+      if (tookGamble) gambleTaken++;
+      resolveYear(s, pick, isRack ? { rack: rackSession(i, t) } : {});
+      if (s.report && s.report.gamble && s.report.gamble.won) gambleWon++;
+      if (s.report && s.report.ratingJump > 0) jumpYears.push(s.report.ratingJump);
+      advance(s); t++; totalYears++;
     }
-  } catch (e) {
-    errors.push(`sim-${i}/${stratName}: ${e.message}`);
-    continue;
-  }
-  statuses[s.status] = (statuses[s.status] || 0) + 1;
-  byStrategy[stratName] = byStrategy[stratName] || {};
-  byStrategy[stratName][s.status] = (byStrategy[stratName][s.status] || 0) + 1;
+  } catch (e) { errors.push(`sim-${i}/${name}: ${e.message}`); continue; }
+  finals.push(s.rating);
+  rackVisitCounts.push(s.rackVisits);
+  if (s.plateaued) plateaus++;
   if (s.snapshot.architect) architects++;
   diamonds += s.certs.diamond;
-  oscars += s.awards.oscarWins;
-  emmys += s.awards.emmyWins;
-  grammyW += s.awards.grammyWins;
-  grammyN += s.awards.grammyNoms;
-  totalCash += s.cash;
-  if (s.cash < 0) negEnd++;
+  grammyW += s.awards.grammyWins; grammyN += s.awards.grammyNoms;
+  oscars += s.awards.oscarWins; emmys += s.awards.emmyWins;
 }
 
+finals.sort((a, b) => a - b);
+const q = (p) => finals[Math.floor(finals.length * p)];
 const pct = (n, d = N) => `${((n / d) * 100).toFixed(1)}%`;
 
-console.log(`\n${N} runs across ${names.length} strategies\n`);
-if (errors.length) {
-  console.log(`ERRORS (${errors.length}):\n${errors.slice(0, 5).join('\n')}\n`);
-}
+console.log(`\n${N} runs · ${TURNS.length} years each · ${names.length} strategies\n`);
+if (errors.length) console.log(`ERRORS (${errors.length}):\n${errors.slice(0, 5).join('\n')}\n`);
 
-console.log('FINAL STATUS');
-for (let i = 1; i <= 6; i++) {
-  console.log(`     ${STATUS[i].name.padEnd(24)} ${String(statuses[i] || 0).padStart(5)}  ${pct(statuses[i] || 0)}`);
-}
+console.log('FINAL OVERALL');
+[['p10', .1], ['p25', .25], ['median', .5], ['p75', .75], ['p90', .9], ['p99', .99]]
+  .forEach(([l, p]) => console.log(`     ${l.padEnd(8)} ${q(p)}`));
+console.log(`     ${'max'.padEnd(8)} ${finals[finals.length - 1]}`);
 
-console.log('\nPEAK STATUS BY STRATEGY');
-for (const n of names) {
-  const b = byStrategy[n] || {};
-  const total = Object.values(b).reduce((a, c) => a + c, 0) || 1;
-  const best = Math.max(...Object.keys(b).map(Number), 0);
-  console.log(`     ${n.padEnd(14)} best ${STATUS[best] ? STATUS[best].name : '—'} · avg tier ${(Object.entries(b).reduce((a, [k, v]) => a + k * v, 0) / total).toFixed(2)}`);
-}
+console.log('\nTALENT');
+console.log(`     Prodigies                ${pct(prodigies)}`);
+console.log(`     …who levelled off        ${pct(plateaus, Math.max(1, prodigies))}`);
 
 console.log('\nRARITIES');
 console.log(`     Architect route          ${pct(architects)}`);
 console.log(`     Diamond plaques          ${diamonds} total (1 per ${(N / Math.max(1, diamonds)).toFixed(0)} runs)`);
 console.log(`     Grammy wins / noms       ${grammyW} / ${grammyN}`);
-console.log(`     Oscar wins               ${oscars}`);
-console.log(`     Emmy wins                ${emmys}`);
-console.log(`     Avg ending cash          $${Math.round(totalCash / N).toLocaleString()}`);
-console.log(`     Ended in the red         ${pct(negEnd)}`);
+console.log(`     Oscar / Emmy wins        ${oscars} / ${emmys}`);
+console.log(`     Years with no offer      ${((emptyYears / totalYears) * 100).toFixed(2)}%`);
 
-console.log('\nWHITE WHALES SEEN');
-for (const c of CARDS.filter((x) => x.cls === 'WHALE')) {
-  const n = whaleSeen[c.id] || 0;
-  console.log(`  ${n === 0 ? '!!' : '  '} ${c.title.padEnd(28)} ${pct(n)}`);
-}
+console.log('\nTHE RACK');
+console.log(`     Years it was offered     ${((rackOffered / totalYears) * 100).toFixed(1)}%`);
+console.log(`     Years it was taken       ${((rackTaken / totalYears) * 100).toFixed(1)}%`);
+console.log(`     Visits per run (avg)     ${(rackVisitCounts.reduce((a, b) => a + b, 0) / Math.max(1, rackVisitCounts.length)).toFixed(1)}`);
+console.log(`     Most in one run          ${Math.max(0, ...rackVisitCounts)}`);
+
+console.log('\nGAMBLES');
+console.log(`     Years one was offered    ${((gambleOffered / totalYears) * 100).toFixed(1)}%`);
+console.log(`     Years one was taken      ${((gambleTaken / totalYears) * 100).toFixed(1)}%`);
+console.log(`     …of those, won           ${((gambleWon / Math.max(1, gambleTaken)) * 100).toFixed(1)}%`);
+
+jumpYears.sort((a, b) => a - b);
+console.log('\nBIG JUMPS');
+console.log(`     Jump years               ${jumpYears.length} (${(jumpYears.length / Math.max(1, N)).toFixed(2)} per run)`);
+console.log(`     Biggest single jump      +${jumpYears.length ? jumpYears[jumpYears.length - 1] : 0}`);
+console.log(`     Runs with a +7 or more   ${pct(jumpYears.filter((j) => j >= 7).length)}`);
 
 const never = CARDS.filter((c) => !cardSeen[c.id]);
-console.log(`\nCARDS NEVER DRAWN (${never.length}/${CARDS.length})`);
+console.log(`\nCARDS NEVER OFFERED (${never.length}/${CARDS.length})`);
 never.forEach((c) => console.log(`     ${c.cls.padEnd(9)} ${c.title}`));
 console.log('');

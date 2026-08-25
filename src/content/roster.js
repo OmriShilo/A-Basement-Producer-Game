@@ -5,69 +5,188 @@
  * gets a name injected. Swap, localize, or replace this whole file and the
  * mechanics are untouched.
  *
- * All names here are fictional. If you want to ship with real artists,
- * replace the arrays — nothing outside this file needs to change.
+ * These are REAL artists and directors, spelled as they style themselves.
+ * Putting real people in a game as characters is a rights question — see the
+ * "before any public launch" section of the README. Nothing outside this file
+ * needs to change if you swap them back out.
  *
  * Entry shape: { name, region, genre }
- *   region: 'US' | 'UK' | 'DE' | 'FR' | 'CA' | 'NG' | 'KR' | 'BR' | 'PR'
+ *   region: see TERRITORY_NAME below
  */
 
 export const ROSTER = {
-  //  — global icons. A placement here is career-defining.
+  // 30 slots — global icons. A placement here is career-defining.
   tier5_global: [
+    { name: 'Taylor Swift', region: 'US', genre: 'pop' },
+    { name: 'Drake', region: 'CA', genre: 'hip-hop' },
+    { name: 'Bad Bunny', region: 'PR', genre: 'reggaeton' },
+    { name: 'The Weeknd', region: 'CA', genre: 'R&B' },
+    { name: 'Beyoncé', region: 'US', genre: 'R&B' },
+    { name: 'Rihanna', region: 'US', genre: 'pop' },
+    { name: 'Kendrick Lamar', region: 'US', genre: 'hip-hop' },
+    { name: 'Kanye West', region: 'US', genre: 'hip-hop' },
     { name: 'Bruno Mars', region: 'US', genre: 'pop' },
     { name: 'Justin Bieber', region: 'CA', genre: 'pop' },
-    { name: 'The Weeknd', region: 'CA', genre: 'R&B' },
-    { name: 'Rema', region: 'NG', genre: 'afrobeats' },
-    { name: 'Burna Boy', region: 'NG', genre: 'afrobeats' },
-    { name: 'Tame Impala', region: 'US', genre: 'psychedelic rock' },
-    { name: 'Rihanna', region: 'US', genre: 'pop' },
-    { name: 'Taylor Swift', region: 'US', genre: 'pop' },
+    { name: 'Ariana Grande', region: 'US', genre: 'pop' },
+    { name: 'Billie Eilish', region: 'US', genre: 'alt-pop' },
+    { name: 'Ed Sheeran', region: 'UK', genre: 'pop' },
+    { name: 'Adele', region: 'UK', genre: 'soul' },
+    { name: 'Dua Lipa', region: 'UK', genre: 'dance-pop' },
+    { name: 'Harry Styles', region: 'UK', genre: 'pop' },
     { name: 'SZA', region: 'US', genre: 'R&B' },
-    { name: 'Bad Bunny', region: 'PR', genre: 'reggaeton' },
     { name: 'Travis Scott', region: 'US', genre: 'hip-hop' },
-    { name: 'Kanye West', region: 'US', genre: 'hip-hop'},
-    { name: 'Drake', region: 'CA', genre: 'hip-hop'},
-    { name: 'Kendrick Lamar', region: 'US', genre: 'hip-hop'},
-    { name: 'Post Malone', region: 'US', genre: 'country'},
-    { name: 'Justin Timberlake', region: 'US', genre: 'pop'}, 
+    { name: 'Post Malone', region: 'US', genre: 'country' },
+    { name: 'Lady Gaga', region: 'US', genre: 'pop' },
+    { name: 'Eminem', region: 'US', genre: 'hip-hop' },
+    { name: 'JAY-Z', region: 'US', genre: 'hip-hop' },
+    { name: 'Tyler, The Creator', region: 'US', genre: 'hip-hop' },
+    { name: 'Doja Cat', region: 'US', genre: 'pop' },
+    { name: 'Olivia Rodrigo', region: 'US', genre: 'alt-pop' },
+    { name: 'Sabrina Carpenter', region: 'US', genre: 'pop' },
+    { name: 'BTS', region: 'KR', genre: 'K-pop' },
+    { name: 'BLACKPINK', region: 'KR', genre: 'K-pop' },
+    { name: 'Burna Boy', region: 'NG', genre: 'afrobeats' },
+    { name: 'Karol G', region: 'CO', genre: 'reggaeton' },
   ],
 
-  //  — international stars.
+  // 30 slots — the second-best tier. International stars.
   tier4_international: [
-    { name: 'John Doe', region: 'US', genre: 'alt-R&B' },
     { name: 'Don Toliver', region: 'US', genre: 'hip-hop' },
+    { name: 'Yeat', region: 'US', genre: 'rage' },
+    { name: 'Ken Carson', region: 'US', genre: 'rage' },
+    { name: 'Destroy Lonely', region: 'US', genre: 'rage' },
+    { name: 'SoFaygo', region: 'US', genre: 'rage' },
+    { name: 'Playboi Carti', region: 'US', genre: 'rage' },
+    { name: 'Future', region: 'US', genre: 'trap' },
+    { name: 'Metro Boomin', region: 'US', genre: 'trap' },
+    { name: 'Young Thug', region: 'US', genre: 'trap' },
+    { name: '21 Savage', region: 'US', genre: 'trap' },
+    { name: 'Lil Baby', region: 'US', genre: 'trap' },
+    { name: 'Gunna', region: 'US', genre: 'trap' },
+    { name: 'Nicki Minaj', region: 'US', genre: 'hip-hop' },
+    { name: 'Cardi B', region: 'US', genre: 'hip-hop' },
+    { name: 'Frank Ocean', region: 'US', genre: 'alt-R&B' },
+    { name: 'Lana Del Rey', region: 'US', genre: 'alt-pop' },
+    { name: 'Central Cee', region: 'UK', genre: 'UK rap' },
+    { name: 'Dave', region: 'UK', genre: 'UK rap' },
+    { name: 'Stormzy', region: 'UK', genre: 'grime' },
+    { name: 'Fred again..', region: 'UK', genre: 'electronic' },
+    { name: 'Rosalía', region: 'ES', genre: 'latin' },
+    { name: 'Wizkid', region: 'NG', genre: 'afrobeats' },
+    { name: 'Rema', region: 'NG', genre: 'afrobeats' },
+    { name: 'Tems', region: 'NG', genre: 'alt-R&B' },
+    { name: 'Tyla', region: 'ZA', genre: 'amapiano' },
+    { name: 'NewJeans', region: 'KR', genre: 'K-pop' },
+    { name: 'Stray Kids', region: 'KR', genre: 'K-pop' },
+    { name: 'Anitta', region: 'BR', genre: 'baile-pop' },
+    { name: 'Rauw Alejandro', region: 'PR', genre: 'reggaeton' },
+    { name: 'PARTYNEXTDOOR', region: 'CA', genre: 'alt-R&B' },
   ],
 
-  //  — nationally known. The tier that gets you in rooms.
+  // 25 slots — nationally known. The tier that gets you in rooms.
   tier3_national: [
-    { name: 'John Doe', region: 'US', genre: 'R&B' },
-   
+    { name: 'Brent Faiyaz', region: 'US', genre: 'alt-R&B' },
+    { name: 'Summer Walker', region: 'US', genre: 'R&B' },
+    { name: 'Jhené Aiko', region: 'US', genre: 'R&B' },
+    { name: 'Giveon', region: 'US', genre: 'R&B' },
+    { name: 'Steve Lacy', region: 'US', genre: 'alt-R&B' },
+    { name: 'Ravyn Lenae', region: 'US', genre: 'alt-R&B' },
+    { name: 'Amaarae', region: 'NG', genre: 'alté' },
+    { name: 'JID', region: 'US', genre: 'rap' },
+    { name: 'Apache 207', region: 'DE', genre: 'rap' },
+    { name: 'Denzel Curry', region: 'US', genre: 'rap' },
+    { name: 'Vince Staples', region: 'US', genre: 'rap' },
+    { name: 'Freddie Gibbs', region: 'US', genre: 'boom bap' },
+    { name: 'Westside Gunn', region: 'US', genre: 'boom bap' },
+    { name: 'Ninho', region: 'FR', genre: 'rap' },
+    { name: 'Smino', region: 'US', genre: 'jazz rap' },
+    { name: 'Saba', region: 'US', genre: 'jazz rap' },
+    { name: 'Noname', region: 'US', genre: 'poetry rap' },
+    { name: 'Little Simz', region: 'UK', genre: 'UK rap' },
+    { name: 'Sampha', region: 'UK', genre: 'alt-R&B' },
+    { name: 'Jorja Smith', region: 'UK', genre: 'R&B' },
+    { name: 'Cleo Sol', region: 'UK', genre: 'soul' },
+    { name: 'Arlo Parks', region: 'UK', genre: 'indie-pop' },
+    { name: 'beabadoobee', region: 'UK', genre: 'indie' },
+    { name: 'Fontaines D.C.', region: 'IE', genre: 'indie rock' },
+    { name: 'Turnstile', region: 'US', genre: 'hardcore' },
   ],
 
-  //  — buzzing, scene-level. Cheap to work with, may go somewhere.
+  // 20 slots — buzzing, scene-level. Cheap to work with, may go somewhere.
   tier2_rising: [
-    { name: 'John Doe', region: 'US', genre: 'alt-pop' },
-   
+    { name: 'Veeze', region: 'US', genre: 'trap' },
+    { name: 'BossMan Dlow', region: 'US', genre: 'trap' },
+    { name: 'Cash Cobain', region: 'US', genre: 'drill' },
+    { name: 'Ice Spice', region: 'US', genre: 'drill' },
+    { name: 'Sexyy Red', region: 'US', genre: 'trap' },
+    { name: 'GloRilla', region: 'US', genre: 'trap' },
+    { name: 'Latto', region: 'US', genre: 'trap' },
+    { name: 'Doechii', region: 'US', genre: 'rap' },
+    { name: 'Flo Milli', region: 'US', genre: 'rap' },
+    { name: 'PinkPantheress', region: 'UK', genre: 'hyperpop' },
+    { name: 'Nemzzz', region: 'UK', genre: 'UK rap' },
+    { name: 'Fimiguerrero', region: 'UK', genre: 'UK rap' },
+    { name: 'Lola Young', region: 'UK', genre: 'soul' },
+    { name: 'Chase Shakur', region: 'US', genre: 'alt-R&B' },
+    { name: '4batz', region: 'US', genre: 'alt-R&B' },
+    { name: 'Leon Thomas', region: 'US', genre: 'R&B' },
+    { name: 'Malcolm Todd', region: 'US', genre: 'indie-pop' },
+    { name: 'Mk.gee', region: 'US', genre: 'indie' },
+    { name: 'Kevin Abstract', region: 'US', genre: 'alt-pop' },
+    { name: 'Faye Webster', region: 'US', genre: 'indie' },
   ],
 
-  //  — unknowns. Also procedurally generatable (see makeLocalName).
+  // 15 slots — unknowns. Also procedurally generatable (see makeLocalName).
   tier1_local: [
-    { name: 'John Doe', region: 'US', genre: 'rap' },
-   
+    { name: 'Anycia', region: 'US', genre: 'trap' },
+    { name: 'TiaCorine', region: 'US', genre: 'trap' },
+    { name: 'Bktherula', region: 'US', genre: 'rage' },
+    { name: 'Kenzo Balla', region: 'US', genre: 'drill' },
+    { name: 'Lay Bankz', region: 'US', genre: 'jersey club' },
+    { name: 'Nourished by Time', region: 'US', genre: 'alt-R&B' },
+    { name: 'Deb Never', region: 'US', genre: 'indie' },
+    { name: 'Wallice', region: 'US', genre: 'indie-pop' },
+    { name: 'Jane Remover', region: 'US', genre: 'hyperpop' },
+    { name: 'LSDXOXO', region: 'US', genre: 'house' },
+    { name: 'Rachel Chinouriri', region: 'UK', genre: 'indie-pop' },
+    { name: 'Odeal', region: 'UK', genre: 'alt-R&B' },
+    { name: 'Nia Archives', region: 'UK', genre: 'jungle' },
+    { name: 'Sammy Virji', region: 'UK', genre: 'garage' },
+    { name: 'Debbie', region: 'NG', genre: 'alté' },
   ],
 
-  //  — US underground rap. A PARALLEL TRACK, NOT A LOWER TIER.
+  // 15 slots — US underground rap. A PARALLEL TRACK, NOT A LOWER TIER.
   // High taste, low relevance, near-zero cash. The Architect route.
   underground_us: [
-    { name: 'John Doe', region: 'US', genre: 'abstract rap' },
-   
+    { name: '2hollis', region: 'US', genre: 'hyperpop' },
+    { name: 'slayr', region: 'US', genre: 'rage' },
+    { name: 'Nettspend', region: 'US', genre: 'rage' },
+    { name: 'xaviersobased', region: 'US', genre: 'rage' },
+    { name: 'osamason', region: 'US', genre: 'plugg' },
+    { name: 'che', region: 'US', genre: 'plugg' },
+    { name: 'Kamiyada+', region: 'US', genre: 'rage' },
+    { name: 'Yhapojj', region: 'US', genre: 'plugg' },
+    { name: 'Autumn!', region: 'US', genre: 'plugg' },
+    { name: 'Sematary', region: 'US', genre: 'noise rap' },
+    { name: 'LUCKI', region: 'US', genre: 'cloud rap' },
+    { name: 'MIKE', region: 'US', genre: 'abstract rap' },
+    { name: 'Navy Blue', region: 'US', genre: 'abstract rap' },
+    { name: 'billy woods', region: 'US', genre: 'experimental rap' },
+    { name: 'redveil', region: 'US', genre: 'soul-sample rap' },
   ],
 
-  // ~10 slots — the film scoring track.
+  // 10 slots — the film scoring track.
   directors: [
-    { name: 'John Doe', region: 'US', genre: 'prestige drama' },
-    
+    { name: 'Christopher Nolan', region: 'UK', genre: 'blockbuster' },
+    { name: 'Denis Villeneuve', region: 'CA', genre: 'sci-fi' },
+    { name: 'Greta Gerwig', region: 'US', genre: 'coming-of-age' },
+    { name: 'Jordan Peele', region: 'US', genre: 'psychological horror' },
+    { name: 'Ari Aster', region: 'US', genre: 'psychological horror' },
+    { name: 'Barry Jenkins', region: 'US', genre: 'prestige drama' },
+    { name: 'Chloé Zhao', region: 'US', genre: 'slow cinema' },
+    { name: 'Ryan Coogler', region: 'US', genre: 'blockbuster' },
+    { name: 'Céline Sciamma', region: 'FR', genre: 'slow cinema' },
+    { name: 'Park Chan-wook', region: 'KR', genre: 'cold thriller' },
   ],
 };
 
@@ -125,11 +244,20 @@ const GENRE_TO_CHART = {
   'gospel rap': 'Gospel/Christian',
   'gospel-soul': 'Gospel/Christian',
   'grime': 'Hip-Hop/Rap',
+  'amapiano': 'Afrobeats',
   'hardcore': 'Rock',
+  'hip-hop': 'Hip-Hop/Rap',
   'historical epic': 'Film Score',
   'horrorcore': 'Hip-Hop/Rap',
   'house': 'Electronic/Dance',
   'hyperpop': 'Electronic/Dance',
+  'jersey club': 'Electronic/Dance',
+  'K-pop': 'Pop',
+  'metal': 'Rock',
+  'plugg': 'Hip-Hop/Rap',
+  'psychedelic rock': 'Rock',
+  'rage': 'Hip-Hop/Rap',
+  'reggaeton': 'Latin',
   'indie': 'Indie/Alternative',
   'indie rock': 'Indie/Alternative',
   'indie-pop': 'Indie/Alternative',
@@ -205,30 +333,30 @@ export const TIER_KEY_BY_LEVEL = {
 export const TERRITORY_NAME = {
   US: 'the States',
   UK: 'the UK',
+  IE: 'Ireland',
   DE: 'Germany',
   FR: 'France',
+  ES: 'Spain',
   CA: 'Canada',
+  AU: 'Australia',
+  MX: 'Mexico',
   NG: 'Nigeria',
+  ZA: 'South Africa',
   KR: 'South Korea',
   BR: 'Brazil',
+  CO: 'Colombia',
   PR: 'Puerto Rico',
 };
 
 /**
- * Territories unlock as you climb the fame ladder.
- * Value = minimum status tier index (see engine/status.js) required.
- *   1 BEDROOM · 2 LOCAL · 3 KNOWN · 4 NATIONAL · 5 INTERNATIONAL · 6 LEGENDARY
+ * Territories open up as the OVERALL RATING climbs.
+ * Value = the minimum rating required to be cast from that territory.
  */
 export const TERRITORY_UNLOCK = {
-  US: 1,
-  UK: 3,
-  DE: 4,
-  FR: 4,
-  CA: 4,
-  NG: 5,
-  KR: 5,
-  BR: 5,
-  PR: 5,
+  US: 0,
+  UK: 70, IE: 70,
+  DE: 78, FR: 78, ES: 78, CA: 78, AU: 78, MX: 78,
+  NG: 78, ZA: 78, KR: 78, BR: 78, CO: 78, PR: 78,
 };
 
 /* --- procedural filler for tier1_local, so the bottom never runs dry --- */
