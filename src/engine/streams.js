@@ -72,7 +72,10 @@ export function firstYearStreams(p) {
   // 0.55x to 1.6x, so two credits with the same artist are not the same record.
   const swing = 0.55 + r * 1.05;
   const underground = p.underground ? 0.35 : 1;
-  return Math.round(listeners * mult * swing * underground);
+  // A single is the record the campaign is built around; an album cut is the
+  // ninth track. Same artist, same room, very different number.
+  const single = p.single ? 2.2 : 1;
+  return Math.round(listeners * mult * swing * underground * single);
 }
 
 /** What one record earns in a given year of its life. */

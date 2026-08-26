@@ -110,6 +110,7 @@ export function createRun(cabinet, seed = newSeed()) {
     firstBigDone: false,   // the first tier-3+ credit pays a one-time jump
     firstBigTier: 0,
     heat: 0,               // years of elevated reach left after a big credit
+    lastLabelSession: null,
     label: null,           // the current deal — see engine/labels.js
     labelHistory: [],      // every deal this run, for the end screen
     pendingRenewal: null,
@@ -158,6 +159,7 @@ function applyFx(s, fxIn) {
       age: s.age,
       turn: s.turn,
       underground: !!fx.underground,
+      single: !!fx.placement.single,
       score: !!fx.score,
       tv: !!fx.tv,
     };
@@ -261,6 +263,20 @@ function poolFor(s, cast) {
   if (cast.track === 'director') return ROSTER.directors;
   // 'any' is eligible as long as one tier is open — which tier is decided at
   // cast time, not here, so the odds live in one place.
+  if (cast.track === 'label') {
+    const names = labelArtistNames(s);
+    if (!names) return [];
+    // Only artists this house actually has, and only ones you are old enough
+    // to be in a room with. A nineteen-year-old on a major does not get the
+    // biggest act on the roster in their first year.
+    const tiered = Object.entries(TIER_KEY_BY_LEVEL)
+      .filter(([tier]) => s.age >= TIER_OPENS_AT[tier])
+      .flatMap(([, key]) => (ROSTER[key] || []).filter((a) => names.includes(a.name)));
+    // Houses like Griselda carry underground names too, and those live outside
+    // the tier pools — leaving them out silently shortened those rosters.
+    const under = (ROSTER.underground_us || []).filter((a) => names.includes(a.name));
+    return [...tiered, ...under];
+  }
   if (cast.track === 'any') {
     return openTiers(s).flatMap(({ tier }) => ROSTER[TIER_KEY_BY_LEVEL[tier]] || []);
   }
@@ -286,6 +302,21 @@ function castFor(s, card, rand) {
     // The tier rides along on the cast: a card written for 'any' has to size
     // its own payoff, and the artist object is the only thing it is handed.
     return { ...preferLabel(s, use, rand), tier };
+  }
+  if (card.cast && card.cast.track === 'label') {
+    const pool = poolFor(s, card.cast);
+    if (!pool || !pool.length) return null;
+    // Repeat work with the same artist is the norm inside a house, so used
+    // artists are not filtered out here the way they are everywhere else —
+    // that is what being on a roster looks like.
+    // Weighted by tier, so the name the house is built around headlines: on
+    // Cactus Jack you should be in a room with Travis Scott more often than
+    // with the newest signing, because that is what the label is.
+    const a = weightedPick(pool, rand, (x) => tierOfArtist(x.name) || 1);
+    const tier = tierOfArtist(a.name) || 1;
+    // Which room it is. Singles are rarer and worth more; most of what you do
+    // on a roster is album work.
+    return { ...a, tier, single: rand() < 0.35 };
   }
   const pool = poolFor(s, card.cast);
   if (!pool) return null;
@@ -339,6 +370,13 @@ function meets(s, card) {
   return true;
 }
 
+/** Which tier a roster name sits in, or 0 if it is not a roster artist. */
+const ARTIST_TIER = new Map(
+  Object.entries(TIER_KEY_BY_LEVEL).flatMap(([tier, key]) =>
+    (ROSTER[key] || []).map((a) => [a.name, Number(tier)])),
+);
+export const tierOfArtist = (name) => ARTIST_TIER.get(name) || 0;
+
 /** The earliest age each roster tier will work with you at all. */
 const TIER_OPENS_AT = { 1: 16, 2: 19, 3: 23, 4: 27, 5: 31 };
 
@@ -386,6 +424,22 @@ function drawOffers(s, rand) {
       const rest = pool.filter((c) => c.id !== lead.id);
       const other = rest.length ? pickOne(rest, rand) : null;
       return other ? [lead, other] : [lead];
+    }
+  }
+
+  // THE HOUSE'S OWN ROOM. Being signed to OVO and never once being in a room
+  // with Drake is the deal failing to be a deal. The casting bias alone could
+  // not promise this — it only fires when a card happens to cast a tier the
+  // label has artists in, so a whole contract could go by without one. While
+  // signed, the label session takes a slot outright if it has not come round
+  // in the last two years.
+  if (s.label) {
+    const since = s.turn - (s.lastLabelSession ?? -99);
+    const session = pool.find((c) => c.labelSession);
+    if (session && since >= 2) {
+      const rest = pool.filter((c) => c.id !== session.id);
+      const other = rest.length ? pickOne(rest, rand) : null;
+      return other ? [session, other] : [session];
     }
   }
 
@@ -510,6 +564,7 @@ export function resolveYear(s, pick, extra = {}) {
         }
       }
     }
+    if (taken.card.labelSession) s.lastLabelSession = s.turn;
     if (taken.card.labelOffer && taken.label) {
       const years = signLabel(s, taken.label, turnRand(s, `sign|${taken.label.id}`));
       s.flags.delete('label_renewal');
@@ -794,17 +849,23 @@ function resolveCertifications(s, rand) {
       2: { gold: 0.25 },
       3: { gold: 0.6, platinum: 0.2 },
       4: { gold: 0.85, platinum: 0.5, multi: 0.15 },
-      // Halved from 0.04: reach means a broken-through career now lands far
-      // more tier-5 credits than it used to, which took Diamond from 1-in-35
-      // runs to 1-in-15. The plaque should stay the rarest thing in the game.
-      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.018 },
+      // Cut twice, for the same reason each time: every change that gets you
+      // into bigger rooms (reach, then guaranteed label sessions) multiplies
+      // tier-5 credits, and Diamond rides on those. 0.04 -> 0.018 -> 0.010.
+      // The plaque has to stay the rarest thing in the game.
+      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.042 },
     }[q.tier] || {};
-    const u = rand() - boost;
+    const u = rand();
     let level = null;
-    if (table.diamond !== undefined && u < table.diamond) level = 'diamond';
-    else if (table.multi !== undefined && u < table.multi) level = 'multi';
-    else if (table.platinum !== undefined && u < table.platinum) level = 'platinum';
-    else if (table.gold !== undefined && u < table.gold) level = 'gold';
+    // The rating boost is a big shift — a tenth of the whole range at OVR 90 —
+    // and applying it to Diamond drowned the threshold completely: a 0.010
+    // chance became an 11% one, which is why cutting the number twice barely
+    // moved the count. Diamond gets a fraction of the boost; everything else
+    // gets all of it, because those SHOULD get easier as you get better.
+    if (table.diamond !== undefined && u < table.diamond + boost * 0.12) level = 'diamond';
+    else if (table.multi !== undefined && u < table.multi + boost) level = 'multi';
+    else if (table.platinum !== undefined && u < table.platinum + boost) level = 'platinum';
+    else if (table.gold !== undefined && u < table.gold + boost) level = 'gold';
     if (level) {
       s.certs[level] += 1;
       // A jump, not ordinary points: a plaque should read the same at OVR 85

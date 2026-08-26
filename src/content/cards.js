@@ -43,6 +43,9 @@
  *            draw time from those that would have you (engine/labels.js) and
  *            rides on the offer as `offer.label`; {label} in body/diary is its
  *            name. Taking it signs you for 1–4 years.
+ *   labelSession  true = cast from the house you are signed to. drawOffers
+ *            forces one into a slot if it has not come round in two years, so
+ *            a deal cannot pass without ever putting you in the room.
  *   renewal  true = this offer is the label you are already with, asking for
  *            another term. Only eligible while the `label_renewal` flag is set,
  *            which tickLabel sets when a term ends well. Passing on it ends the
@@ -63,7 +66,9 @@
  * EFFECT KEYS
  *   rating                     whole rating points, + or −; scaled by the curve
  *   ratingJump                 whole rating points that BYPASS the curve
- *   placement: { tier }        records a credit with the cast artist
+ *   placement: { tier, single } records a credit with the cast artist.
+ *                              `single` marks it as a single rather than album
+ *                              work, which streams roughly 2.2x harder.
  *   underground: true          marks the placement as underground-track
  *   score: true                the placement is a score (Oscar/Emmy eligible)
  *   tv: true                   the placement is television (Emmy eligible)
@@ -811,6 +816,36 @@ export const CARDS = [
       fx: { rating: 2, flags: ['signed'] },
       diary: 'you re-signed with {label} and stayed where the records were.' },
     pass: { label: 'Leave the roster', fx: {}, diary: 'you let the deal with {label} lapse and went back to answering your own emails.' } },
+
+  {
+    /* THE ROOM UPSTAIRS — the deal actually paying out.
+       Cast from the house you are signed to, and forced into a slot if it has
+       not come round in two years (see drawOffers), so signing to OVO cannot
+       go by without ever being in a room with Drake. Whether it is a single or
+       album work is rolled at draw time and stated on the card; a single is
+       rarer, worth a jump, and streams far harder. */
+    id: 'l_the_room_upstairs',
+    cls: 'CONTRACT',
+    title: 'The room upstairs',
+    cast: { track: 'label' },
+    labelSession: true,
+    repeatable: true,
+    req: { flags: ['signed'] },
+    weight: 5,
+    body: (v) => (v.single
+      ? `${v.artist} is cutting a single and the room is booked for the week. Everyone on the roster gets a shot at it and only one beat survives.`
+      : `${v.artist} is deep in an album and short of records. You are on the roster, the room is down the hall, and nobody has to introduce you.`),
+    accept: {
+      label: 'Take the room',
+      fx: (st) => {
+        const c = st.cast || {};
+        const tier = c.tier || 2;
+        return c.single
+          ? { rating: 2, ratingJump: 2, placement: { tier, single: true }, flags: ['album_credit'] }
+          : { rating: 1, placement: { tier }, flags: ['album_credit'] };
+      },
+      diary: 'you were down the hall from {artist} and walked out with a record.' },
+    pass: { label: 'Sit this one out', fx: {}, diary: null } },
 
   /* ================================================================= */
   /* THE ORDINARY YEARS — repeatable filler.                           */
