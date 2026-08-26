@@ -359,12 +359,12 @@ function pickOne(pool, rand) {
 
 /**
  * Which house is at the table. A renewal always names the label you are already
- * with — that is what makes it a renewal — and anything else picks a house that
- * would plausibly have you at your current reach.
+ * with — that is what makes it a renewal — and anything else picks a house whose
+ * hidden OVERALL gate you have cleared.
  */
 function labelFor(s, card, rand) {
   if (card.renewal) return s.pendingRenewal ? LABEL_BY_ID.get(s.pendingRenewal) : null;
-  return pickLabel(s, reachTier(s), rand);
+  return pickLabel(s, rand);
 }
 
 /** The two offers for a year. Never the same card twice. */

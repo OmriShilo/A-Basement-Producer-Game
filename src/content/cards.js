@@ -751,7 +751,12 @@ export const CARDS = [
     title: 'The deal',
     labelOffer: true,
     repeatable: true,
-    req: { rating: 66, age: [19, 44], not: ['signed'] },
+    /* No rating gate here on purpose — the gate lives on each label
+       (labels.js `minOvr`), so who is at the table changes with your OVERALL
+       while the card itself stays available. A rating req here would override
+       the bottom band's "anyone" and put deals out of reach entirely. The age
+       floor stays: nobody signs a producer at seventeen. */
+    req: { age: [19, 44], not: ['signed'] },
     weight: 4,
     body: (v) => `${v.label} want you on the roster — ${v.labelLine}. Their producers get the calls you have been chasing, and for the length of the term you are theirs.`,
     accept: {

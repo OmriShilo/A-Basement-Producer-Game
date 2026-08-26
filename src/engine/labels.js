@@ -31,17 +31,32 @@ if (UNKNOWN.length) {
 /** How often the label's own roster wins the casting when you are signed. */
 export const LABEL_CAST_BIAS = 0.8;
 
-/** Labels that would have you, given how far you can currently reach. */
-export function labelsOpenTo(s, reach) {
-  return LABELS.filter((l) => l.reach <= reach && (!s.label || s.label.id !== l.id));
+/**
+ * Labels that would have you.
+ *
+ * Gated on OVERALL, not on credits. This used to key off the tier you could
+ * reach, which meant a label was really asking "who have you worked with" —
+ * a checklist. A hidden rating gate is the better model: a house signs a
+ * producer on what they think you are worth, and you simply notice that the
+ * bigger names start showing up once you are good enough. The thresholds are
+ * never printed anywhere.
+ */
+export function labelsOpenTo(s) {
+  return LABELS.filter((l) => s.rating >= l.minOvr && (!s.label || s.label.id !== l.id));
 }
 
-export function pickLabel(s, reach, rand) {
-  const open = labelsOpenTo(s, reach);
+export function pickLabel(s, rand) {
+  const open = labelsOpenTo(s);
   if (!open.length) return null;
-  // The houses nearest your reach are the ones actually interested; the ones
-  // far below it have stopped being a step up.
-  const weighted = open.map((l) => ({ l, weight: Math.max(1, 5 - (reach - l.reach) * 2) }));
+  // The houses whose gate you have only just cleared are the ones actually
+  // chasing you. A band you passed long ago has stopped being a step up, so it
+  // fades out rather than disappearing — a big producer can still choose to go
+  // sign with an indie, it is just no longer the likely offer.
+  const best = Math.max(...open.map((l) => l.minOvr));
+  const weighted = open.map((l) => ({
+    l,
+    weight: l.minOvr === best ? 6 : best - l.minOvr <= 10 ? 3 : 1,
+  }));
   const total = weighted.reduce((a, x) => a + x.weight, 0);
   let r = rand() * total;
   for (const x of weighted) { r -= x.weight; if (r <= 0) return x.l; }
