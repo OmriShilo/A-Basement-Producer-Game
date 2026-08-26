@@ -1,0 +1,6 @@
+# Unlisted, not secret. The link is meant to be passed to people directly
+# rather than found, so nothing here should be indexed. This is a request,
+# not a lock — a crawler that ignores robots.txt will ignore this too, and
+# anyone with the URL can still play.
+User-agent: *
+Disallow: /

@@ -151,3 +151,18 @@ const never = CARDS.filter((c) => !cardSeen[c.id]);
 console.log(`\nCARDS NEVER OFFERED (${never.length}/${CARDS.length})`);
 never.forEach((c) => console.log(`     ${c.cls.padEnd(9)} ${c.title}`));
 console.log('');
+
+/* Exit non-zero on anything that means the deck is BROKEN rather than merely
+   badly balanced, so CI can gate a deploy on it. Balance is a judgement call
+   and is left to a human reading the numbers above. A run that throws, a card
+   that can never be drawn, or a year with nothing on the table are not
+   judgement calls — they are bugs, and a card edit can introduce any of them
+   without breaking the build. */
+const problems = [];
+if (errors.length) problems.push(`${errors.length} runs threw`);
+if (never.length) problems.push(`${never.length} cards can never be drawn`);
+if (emptyYears > 0) problems.push(`${emptyYears} years had no offer at all`);
+if (problems.length) {
+  console.error(`FAILED: ${problems.join('; ')}\n`);
+  process.exit(1);
+}

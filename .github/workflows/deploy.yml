@@ -1,0 +1,67 @@
+﻿# Builds the game and publishes it to GitHub Pages on every push to master.
+#
+# GitHub Pages rather than Netlify or Vercel because the repo already lives
+# here: no new account, no new token, and custom domains are free on a public
+# repo. The build is a static 824K bundle with no server and no routing, so
+# there is nothing for a host to do beyond serve files.
+#
+# The site is UNLISTED, not private. Anyone with the URL can play. robots.txt
+# and a noindex meta keep it out of search results, and that is the whole of
+# the protection — see the note in public/robots.txt.
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [master]
+  # so a deploy can be re-run from the Actions tab without a commit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. A queued one supersedes an older queued one, but
+# an in-flight deploy is allowed to finish rather than being cancelled halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` needs the lockfile to match package.json exactly, which is
+      # what makes the deployed build reproducible rather than "whatever npm
+      # resolved today".
+      - run: npm ci
+
+      - run: npm run build
+
+      # Balance is a property of the content, not of the code, so a card edit
+      # can break it without breaking the build. The harness throws on an
+      # unreachable card or a crashed run, so a bad deck fails here rather
+      # than shipping.
+      - name: Sanity-check the deck
+        run: node scripts/sim.mjs 400
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
