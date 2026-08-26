@@ -148,7 +148,6 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 /* the header row reuses the column classes, so neutralise their row styling */
 .log-cols .c-age,
 .log-cols .c-act,
-.log-cols .c-out,
 .log-cols .c-plq,
 .log-cols .c-awd {
   font-family: var(--mono);
@@ -194,14 +193,17 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
           text-overflow: ellipsis; white-space: nowrap; }
 .c-plq  { width: clamp(70px, 8vw, 150px); flex: none; display: flex; align-items: center; gap: clamp(6px, 0.65vw, 12px); }
 .c-awd  { width: clamp(64px, 8.4vw, 158px); flex: none; display: flex; align-items: center; gap: 8px; }
-.c-out  { width: clamp(110px, 13vw, 240px); flex: none; font-family: var(--courier);
-          font-size: clamp(12px, 1.1vw, 21px); line-height: 1.25; }
 .c-none { font-size: clamp(12px, 0.9vw, 17px); color: var(--text-ghost); }
 
+/* Valence used to colour a sentence in its own column. With that column gone
+   it colours the action itself, so neutral has to be the default ink rather
+   than a muted grey — otherwise every ordinary year reads as a bad one. */
 .v-good { color: var(--green); }
 .v-standout { color: var(--amber); }
 .v-setback { color: var(--red); }
-.v-neutral { color: var(--text-body); }
+.v-neutral { color: var(--text); }
+.c-empty { color: var(--text-ghost); font-family: var(--mono); font-size: clamp(12px, 0.9vw, 17px);
+           text-transform: none; letter-spacing: 0; }
 
 @media (max-width: 1200px) { .c-awd { display: none; } }
 @media (max-width: 980px)  { .c-plq { display: none; } }
@@ -676,3 +678,60 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   opacity: 0.28;
 }
 .term i.served { opacity: 1; }
+
+/* ---- the gamble roll ----------------------------------------------
+   The track is the odds drawn to scale, so a 35% card literally shows
+   a small green zone and a large red one. The marker's landing spot is
+   chosen from the result the engine already computed — the animation
+   reveals, it never decides.                                          */
+.roll-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: clamp(20px, 4vw, 60px);
+}
+.roll-card {
+  width: min(760px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--amber);
+  padding: clamp(24px, 3vw, 48px);
+}
+.roll-eyebrow { color: var(--text-faint); display: block; margin-bottom: clamp(18px, 2vw, 30px); }
+
+.roll-track {
+  position: relative; display: flex; height: clamp(46px, 5vw, 70px);
+  border: 1px solid var(--border);
+}
+.roll-zone {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: clamp(11px, 1vw, 16px); font-weight: 700;
+  letter-spacing: 0.16em; overflow: hidden;
+}
+.roll-zone.win  { background: rgba(91, 232, 122, 0.14); color: var(--green); }
+.roll-zone.lose { background: rgba(200, 30, 30, 0.14);  color: var(--red); }
+
+.roll-marker {
+  position: absolute; top: -7px; bottom: -7px; left: 0; width: 3px;
+  background: var(--text); box-shadow: 0 0 14px rgba(232, 228, 220, 0.85);
+  /* long, heavily eased sweep: fast out of the gate, slow into the result */
+  transition: left 1650ms cubic-bezier(0.12, 0.75, 0.06, 1);
+}
+.roll-marker.idle { left: 0; transition: none; }
+
+.roll-result { min-height: clamp(150px, 17vw, 220px); padding-top: clamp(22px, 2.4vw, 36px); }
+.roll-verdict {
+  font-family: var(--anton); font-size: clamp(30px, 4vw, 62px); line-height: 1;
+  text-transform: uppercase;
+}
+.roll-verdict.won  { color: var(--green); text-shadow: 0 0 26px rgba(91, 232, 122, 0.45); }
+.roll-verdict.lost { color: var(--red);   text-shadow: 0 0 26px rgba(200, 30, 30, 0.4); }
+.roll-swing {
+  font-family: var(--mono); font-size: clamp(13px, 1.2vw, 20px); font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); margin-top: 10px;
+}
+.roll-note {
+  font-family: var(--courier); font-size: clamp(13px, 1.05vw, 18px);
+  color: var(--text-body); margin-top: 14px; max-width: 52ch; line-height: 1.45;
+}
+.roll-go { margin-top: clamp(18px, 2vw, 28px); }
+
+@media (prefers-reduced-motion: reduce) { .roll-marker { transition: none; } }

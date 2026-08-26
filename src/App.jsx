@@ -9,6 +9,7 @@ import {
    every player, including the ones who never open it, so it is split out and
    fetched the first time a year is actually spent at the keys. */
 const Rack = React.lazy(() => import('./ui/Rack.jsx'));
+import GambleRoll from './ui/GambleRoll.jsx';
 import { STANDING, isArchitect } from './engine/status.js';
 import { labelStatus } from './engine/labels.js';
 import { PRODIGY_AT } from './engine/rating.js';
@@ -214,11 +215,26 @@ function Run({ run: s, name, push, onFinish, onCabinet, onTitle }) {
   // stays exactly where it was while you play.
   const [rackPick, setRackPick] = useState(null);
 
-  function commit(i, extra) {
-    resolveYear(s, i, extra);
+  // The roll is shown BETWEEN resolving and advancing. resolveYear has already
+  // decided the outcome, so the animation is a reveal and never a decision —
+  // holding the advance is what lets the player watch it before the year turns
+  // over.
+  const [roll, setRoll] = useState(null);
+
+  function step() {
     advance(s);
     if (s.phase === 'end') onFinish(s);
     push(s);
+  }
+  function commit(i, extra) {
+    resolveYear(s, i, extra);
+    const g = s.report && s.report.gamble;
+    if (g) { setRoll(g); push(s); return; }
+    step();
+  }
+  function endRoll() {
+    setRoll(null);
+    step();
   }
   function choose(i) {
     if (s.phase !== 'choose') return;
@@ -237,6 +253,9 @@ function Run({ run: s, name, push, onFinish, onCabinet, onTitle }) {
     push(s);
   }
 
+  if (roll) {
+    return <GambleRoll chance={roll.chance} won={roll.won} swing={roll.swing} onDone={endRoll} />;
+  }
   if (s.phase === 'end') {
     return <EndScreen s={s} name={name} onCabinet={onCabinet} onTitle={onTitle} />;
   }
@@ -261,7 +280,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
   const detail = s.log.slice(-LOG_ROWS);
   const folded = s.log.slice(0, Math.max(0, s.log.length - LOG_ROWS));
   const prev = s.log.length ? s.log[s.log.length - 1] : null;
-  const delta = s.report ? s.report.ratingMove : 0;
+  const delta = s.report ? s.report.shownMove : 0;
   const ovr = overallRating(s);
 
   return (
@@ -303,7 +322,6 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
             <span className="c-act" style={{ fontFamily: 'var(--mono)', fontSize: 'inherit' }}>What you did</span>
             <span className="c-plq">Plaques</span>
             <span className="c-awd">Awards</span>
-            <span className="c-out">How it landed</span>
           </div>
 
           {folded.length > 0 && (
@@ -315,18 +333,15 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
           <div className="log-rows">
             {detail.length === 0 && (
               <div className="log-row">
-                <span className="c-out v-neutral" style={{ width: 'auto' }}>
-                  Nothing has happened yet. That is what year one is.
-                </span>
+                <span className="c-act c-empty">Nothing has happened yet</span>
               </div>
             )}
             {detail.map((e) => (
               <div className={`log-row${e.valence === 'standout' ? ' standout' : ''}`} key={e.year}>
                 <span className={`c-age${e.valence === 'standout' ? ' v-standout-age' : ''}`}>{e.age}</span>
-                <span className={`c-act${e.valence === 'standout' ? ' v-standout' : ''}`}>{e.action}</span>
+                <span className={`c-act v-${e.valence}`}>{e.action}</span>
                 <span className="c-plq"><Plaques p={e.plaques} /></span>
                 <span className="c-awd"><Awards list={e.awards} /></span>
-                <span className={`c-out v-${e.valence}`}>{e.outcome}</span>
               </div>
             ))}
           </div>

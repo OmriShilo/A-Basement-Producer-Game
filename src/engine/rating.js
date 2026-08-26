@@ -69,7 +69,10 @@ export function growthMultiplier(s) {
 
 /** Rolled once per run. Never shown, never explained, entirely load-bearing. */
 export function rollPotential(talent, prodigy, rand) {
-  const base = 70 + Math.floor(rand() * 26);       // 70..95
+  /* Was 70..95. Lowered because gambles no longer take permanent rating off
+     you: careers now reach their ceiling far more reliably, so the ceiling
+     itself had to come down to keep the median career from finishing elite. */
+  const base = 65 + Math.floor(rand() * 26);       // 65..90
   const p = Math.max(base, talent + 10) + (prodigy ? 4 : 0);
   return Math.min(99, p);
 }
@@ -168,10 +171,85 @@ export function applyJump(s, points) {
  */
 export const CERT_JUMP = { gold: 1, platinum: 2, multi: 4, diamond: 8 };
 
+
+/* ------------------------------------------------------------------ */
+/* FORM — temporary OVERALL                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The rating is two numbers now: what you have permanently built, and what you
+ * are carrying this season.
+ *
+ * Gambles move the temporary one. A bet that comes off is not a career, it is a
+ * good few months — so it pays +1 to +3 of FORM, and a bet that misses costs 1
+ * or 2 of it. That is the fix for gambles feeling brutal: losing three in a row
+ * used to strip fifteen points of career off you permanently, when what actually
+ * happened is you had a bad couple of years.
+ *
+ * Form is not free, though, and it is not permanent by default:
+ *
+ *   A GOOD YEAR BANKS IT. Land a credit, a plaque or an award and everything
+ *   you are carrying converts into permanent rating. Form is the game asking
+ *   whether you can turn a hot streak into something real before it fades.
+ *
+ *   A QUIET YEAR BLEEDS IT. Nothing lands, and form drains a point a year back
+ *   toward zero. Sitting on a good bet does not keep it.
+ *
+ *   AGE DOES NOT TOUCH IT. Decay comes off permanent rating only, so an older
+ *   producer can still have a hot year — they just cannot stop the base
+ *   eroding underneath it. That is what getting old looks like from inside.
+ */
+
+/** Form cannot run away with the game in either direction. */
+export const TEMP_MAX = 8;
+export const TEMP_MIN = -6;
+
+/** Add or remove form. Returns the actual movement after clamping. */
+export function applyTemp(s, points) {
+  if (!points) return 0;
+  const before = s.temp;
+  s.temp = Math.max(TEMP_MIN, Math.min(TEMP_MAX, s.temp + points));
+  return s.temp - before;
+}
+
+/**
+ * End of year. `banked` is whether anything real landed — a credit, a plaque,
+ * an award.
+ *
+ * Returns what was converted into permanent rating, which is 0 on a quiet year.
+ *
+ * Banking is ONE FOR ONE — three points of form become three points of rating.
+ * It ran through applyRating at first, which meant the growth curve amplified
+ * it: +3 form banked at nineteen came out as +8 permanent, and the median
+ * career jumped five points. It also made the mechanic unreadable, because the
+ * number you were carrying was not the number you got. It goes through
+ * applyJump instead, so the very top of the scale still resists and nothing
+ * else does.
+ */
+export function settleTemp(s, banked) {
+  if (banked) {
+    // A good year washes out a bad bet as well as banking a good one — you
+    // delivered, and nobody is still counting the miss.
+    if (s.temp <= 0) { s.temp = 0; return 0; }
+    const gained = applyJump(s, s.temp);
+    s.temp = 0;
+    return gained;
+  }
+  // Nothing landed. Form bleeds back toward zero a point at a time.
+  if (s.temp > 0) s.temp -= 1;
+  else if (s.temp < 0) s.temp += 1;
+  return 0;
+}
+
+/** What the player sees: what you built, plus what you are carrying. */
+export function shownRating(s) {
+  return Math.max(0, Math.min(99, s.rating + s.temp));
+}
+
 /* ---- reading it ---------------------------------------------------- */
 
 export function overallRating(s) {
-  return s.rating;
+  return shownRating(s);
 }
 
 export function ratingTier(r) {

@@ -49,6 +49,12 @@
  *            relationship — they do not ask twice.
  *   gamble   { chance }  makes the card yellow. `chance` is a 0–1 number, or
  *            (cast) => number when the odds depend on who it cast.
+ *   stakes   [win, lose]  what a yellow card swings, in FORM (temporary
+ *            overall) — never permanent rating. A bet coming off is a good few
+ *            months, not a career. Banded by the odds: long shots run [3,-2],
+ *            coin flips [2,-2], safe bets [1,-1]. Anything permanent a yellow
+ *            card produces comes from its `placement` / `ratingJump`, i.e. from
+ *            an actual record, not from the bet paying out.
  *   accept / pass / fail:
  *            label   button text (accept/pass only)
  *            fx      effects object, or (s) => effects object
@@ -382,13 +388,16 @@ export const CARDS = [
     repeatable: true,
     weight: 2,
     gamble: { chance: (cast) => [0, 0.80, 0.70, 0.58, 0.46, 0.35][(cast && cast.tier) || 1] },
+    stakes: [3, -2],
     body: (v) => `${v.artist} is in that studio until Thursday and somebody put your name on the list. You get one night in the room. Either you leave with a song or you leave having been there.`,
     accept: {
       label: 'Go to the session',
       fx: (s) => {
         const t = (s.cast && s.cast.tier) || 1;
         return {
-          rating: [0, 2, 3, 4, 5, 6][t],
+          // No flat `rating` here: this is a yellow card, so its win/loss
+          // swing is carried by `stakes` as form. What survives is the credit
+          // and the jump — those are a real record, not a hot streak.
           // The whole reason jumps exist. A tier-5 room that converts is the
           // single biggest thing that can happen in a career. The bottom two
           // tiers get no jump at all — this card is repeatable, and a local
@@ -400,7 +409,7 @@ export const CARDS = [
       },
       diary: 'you were in the room with {artist} until six in the morning and you left with a song.' },
     fail: {
-      fx: { rating: -2 },
+      fx: {},
       diary: 'you sat in {artist}\'s session for nine hours, played four things, and nobody looked up.' },
     pass: { label: 'Stay home', fx: {}, diary: null } },
 
@@ -412,13 +421,14 @@ export const CARDS = [
     req: { rating: 60, age: [18, 42] },
     weight: 3,
     gamble: { chance: 0.45 },
+    stakes: [3, -2],
     body: (v) => `${v.artist}'s camp says come out, but they are not paying for it. The flight and the week are yours. Half the producers you know have done this and come home with nothing.`,
     accept: {
       label: 'Book the flight',
-      fx: { rating: 3, placement: { tier: 3 } },
+      fx: { placement: { tier: 3 } },
       diary: 'you paid for your own flight and came home with a record.' },
     fail: {
-      fx: { rating: -3 },
+      fx: {},
       diary: 'you paid for the flight and the week and never got in the room. Nobody was lying. It just did not happen.' },
     pass: { label: 'Make them pay', fx: {}, diary: null } },
 
@@ -429,13 +439,14 @@ export const CARDS = [
     req: { rating: 70, age: [21, 46] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: () => 'They will pay you properly today for everything you own, or nothing today for keeping it. You have seen this go both ways with people you know.',
     accept: {
       label: 'Keep the masters',
-      fx: { rating: 4, flags: ['owns_masters'] },
+      fx: { flags: ['owns_masters'] },
       diary: 'you turned down the advance and kept everything, and for two years it looked like a mistake.' },
     fail: {
-      fx: { rating: -4 },
+      fx: {},
       diary: 'you kept your masters and nobody ever came back with an offer. You still own all of it.' },
     pass: { label: 'Take the money', fx: { rating: 1 }, diary: null } },
 
@@ -446,13 +457,14 @@ export const CARDS = [
     req: { rating: 62, age: [17, 36] },
     weight: 3,
     gamble: { chance: 0.4 },
+    stakes: [3, -2],
     body: () => 'Fifteen seconds of the unreleased record, posted from your own account. If it moves, the label has to put it out. If it does not, you leaked somebody else\'s song for nothing.',
     accept: {
       label: 'Post it',
-      fx: { rating: 3, flags: ['viral'] },
+      fx: { flags: ['viral'] },
       diary: 'you posted fifteen seconds at one in the morning and woke up to it everywhere.' },
     fail: {
-      fx: { rating: -4, flags: ['burned_bridge'] },
+      fx: { flags: ['burned_bridge'] },
       diary: 'you leaked the snippet, it did nothing, and the artist\'s manager made sure everyone knew it was you.' },
     pass: { label: 'Wait for the rollout', fx: {}, diary: null } },
 
@@ -464,13 +476,14 @@ export const CARDS = [
     req: { rating: 64, age: [17, 40] },
     weight: 3,
     gamble: { chance: 0.35 },
+    stakes: [3, -2],
     body: (v) => `You have an A&R's real email and one beat you would bet the year on. Sending it burns the only cold shot you get at ${v.artist}'s camp.`,
     accept: {
       label: 'Send it cold',
-      fx: { rating: 3, placement: { tier: 4 } },
+      fx: { placement: { tier: 4 } },
       diary: 'you sent one beat cold to an A&R and eleven days later it was somebody\'s single.' },
     fail: {
-      fx: { rating: -2 },
+      fx: {},
       diary: 'you sent the best thing you had made to an A&R and it was never opened.' },
     pass: { label: 'Wait for a warm intro', fx: {}, diary: null } },
 
@@ -481,13 +494,14 @@ export const CARDS = [
     req: { rating: 63, age: [18, 44] },
     weight: 3,
     gamble: { chance: 0.55 },
+    stakes: [2, -1],
     body: () => 'It is four bars of a record from 1974 and it is the entire song. Clearing it will take a year and most of the money. Putting it out will take an afternoon.',
     accept: {
       label: 'Put it out anyway',
-      fx: { rating: 3, placement: { tier: 2 } },
+      fx: { placement: { tier: 2 } },
       diary: 'you put it out uncleared and nobody ever came looking.' },
     fail: {
-      fx: { rating: -5 },
+      fx: {},
       diary: 'the letter came fourteen months later. You had already spent the money and the record came down.' },
     pass: { label: 'Clear it or kill it', fx: { rating: 1 }, diary: null } },
 
@@ -498,13 +512,14 @@ export const CARDS = [
     req: { rating: 72, age: [20, 44] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: () => 'A real deal with a real budget, and a clause taking a piece of everything you do for seven years, including the parts that have nothing to do with them.',
     accept: {
       label: 'Sign it',
-      fx: { rating: 4, flags: ['signed_360'] },
+      fx: { flags: ['signed_360'] },
       diary: 'you signed the 360 and for the first time in your life the budget was not the problem.' },
     fail: {
-      fx: { rating: -6, flags: ['shelved'] },
+      fx: { flags: ['shelved'] },
       diary: 'you signed the 360 and then they shelved you, and the clause meant you could not go anywhere else either.' },
     pass: { label: 'Stay free', fx: { rating: 1 }, diary: null } },
 
@@ -515,13 +530,14 @@ export const CARDS = [
     req: { age: [18, 30] },
     weight: 3,
     gamble: { chance: 0.6 },
+    stakes: [2, -1],
     body: () => 'Nine hours a day that pay the rent and take every hour you would have worked. Quitting buys you a year of music and about four months of savings.',
     accept: {
       label: 'Quit',
-      fx: { rating: 3 },
+      fx: {},
       diary: 'you quit the job with four months of savings and made it to month eleven.' },
     fail: {
-      fx: { rating: -4 },
+      fx: {},
       diary: 'you quit the job, ran out in month five, and went back to a worse one with your tail down.' },
     pass: { label: 'Keep the job', fx: { rating: 1 }, diary: null } },
 
@@ -532,13 +548,14 @@ export const CARDS = [
     req: { age: [17, 32] },
     weight: 2,
     gamble: { chance: 0.45 },
+    stakes: [3, -2],
     body: () => 'A room of two hundred people and eight producers with one beat each. Everyone who matters locally will be there, watching you win or watching you lose.',
     accept: {
       label: 'Enter it',
-      fx: { rating: 3, flags: ['local_name'] },
+      fx: { flags: ['local_name'] },
       diary: 'you won the battle in front of two hundred people and everyone in the city knew your name by Monday.' },
     fail: {
-      fx: { rating: -2 },
+      fx: {},
       diary: 'you went out in the second round to a kid four years younger and had to stay for the rest of it.' },
     pass: { label: 'Stay out of it', fx: {}, diary: null } },
 
@@ -550,13 +567,14 @@ export const CARDS = [
     req: { rating: 74, age: [22, 48] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: (v) => `${v.artist} will do the verse for a fee you would have to borrow. Half the people who pay for a feature get a record. The other half get an invoice.`,
     accept: {
       label: 'Pay for it',
-      fx: { rating: 3, placement: { tier: 4 } },
+      fx: { placement: { tier: 4 } },
       diary: 'you borrowed the money for {artist}\'s verse and it came back in three weeks and it was worth every cent.' },
     fail: {
-      fx: { rating: -5 },
+      fx: {},
       diary: 'you paid for the verse. It never came. Everyone told you afterwards that this is what happens.' },
     pass: { label: 'Keep the money', fx: {}, diary: null } },
 
@@ -567,13 +585,14 @@ export const CARDS = [
     req: { age: [18, 38] },
     weight: 2,
     gamble: { chance: 0.65 },
+    stakes: [2, -1],
     body: () => 'Everything you need, financed over three years at a rate you did not read closely. The room becomes real today and the payments start next month.',
     accept: {
       label: 'Sign for it',
-      fx: { rating: 2 },
+      fx: {},
       diary: 'you financed the whole room in one afternoon and made better records the same week.' },
     fail: {
-      fx: { rating: -3 },
+      fx: {},
       diary: 'the payments outlived the excitement by about two years.' },
     pass: { label: 'Buy it slowly', fx: { rating: 1 }, diary: null } },
 
@@ -585,13 +604,14 @@ export const CARDS = [
     req: { rating: 74, age: [23, 48] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: (v) => `${v.artist} wants to leave the label and put the next one out with just you. No marketing, no radio, no safety net, and all of it yours.`,
     accept: {
       label: 'Do it independently',
-      fx: { rating: 2, ratingJump: 5, placement: { tier: 4 } },
+      fx: { ratingJump: 5, placement: { tier: 4 } },
       diary: 'you put it out with {artist} and nobody else, and it went further than the label ever took them.' },
     fail: {
-      fx: { rating: -5 },
+      fx: {},
       diary: 'you put it out independently with {artist} and found out exactly what a marketing budget was for.' },
     pass: { label: 'Stay with the label', fx: { rating: 1, placement: { tier: 3 } }, diary: null } },
 
@@ -602,13 +622,14 @@ export const CARDS = [
     req: { rating: 70, age: [21, 48] },
     weight: 2,
     gamble: { chance: 0.4 },
+    stakes: [3, -2],
     body: () => 'You made the record and somebody else is credited for it. You have the session files, the dates and every message. Saying so out loud is a decision you cannot walk back.',
     accept: {
       label: 'Say it publicly',
-      fx: { rating: 3, flags: ['spoke_up'] },
+      fx: { flags: ['spoke_up'] },
       diary: 'you posted the session files with the dates on them and the credit was corrected within a week.' },
     fail: {
-      fx: { rating: -5, flags: ['burned_bridge'] },
+      fx: { flags: ['burned_bridge'] },
       diary: 'you said it publicly, you were completely right, and three rooms closed to you anyway.' },
     pass: { label: 'Let it go', fx: { rating: -1 }, diary: null } },
 
@@ -620,13 +641,14 @@ export const CARDS = [
     req: { rating: 66, age: [19, 42] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: (v) => `${v.artist} is not big yet. You could give them the entire year and turn down everything else, and be the producer of record if it happens.`,
     accept: {
       label: 'Give them the year',
-      fx: { rating: 2, ratingJump: 6, placement: { tier: 4 }, flags: ['the_one'] },
+      fx: { ratingJump: 6, placement: { tier: 4 }, flags: ['the_one'] },
       diary: 'you gave {artist} the whole year and they broke, and everyone knew whose records those were.' },
     fail: {
-      fx: { rating: -4 },
+      fx: {},
       diary: 'you gave {artist} the whole year and they did not break, and you had turned everything else down.' },
     pass: { label: 'Keep your options', fx: { rating: 1 }, diary: null } },
 
@@ -638,13 +660,14 @@ export const CARDS = [
     req: { rating: 68, age: [20, 46] },
     weight: 2,
     gamble: { chance: 0.7 },
+    stakes: [1, -1],
     body: (v) => `${v.artist}'s album masters on Friday and they want one more. It is Tuesday. You can say yes and find out whether you can actually do it.`,
     accept: {
       label: 'Take the deadline',
-      fx: { rating: 2, placement: { tier: 3 } },
+      fx: { placement: { tier: 3 } },
       diary: 'you had three days and you made it, and it is the best thing on the record.' },
     fail: {
-      fx: { rating: -3 },
+      fx: {},
       diary: 'you had three days and you sent something you were not proud of, and they used it.' },
     pass: { label: 'Say no', fx: {}, diary: null } },
 
@@ -656,13 +679,14 @@ export const CARDS = [
     req: { age: [17, 44] },
     weight: 3,
     gamble: { chance: 0.45 },
+    stakes: [3, -2],
     body: (v) => `${v.artist} has nine hundred listeners and something you have not heard anyone else do. You would be building the whole thing from nothing, on your own time.`,
     accept: {
       label: 'Build it with them',
-      fx: { rating: 3, placement: { tier: 2 }, underground: true },
+      fx: { placement: { tier: 2 }, underground: true },
       diary: 'you found {artist} at nine hundred listeners and were there for all of it.' },
     fail: {
-      fx: { rating: -2 },
+      fx: {},
       diary: 'you gave {artist} two years. They quit and got a job, and the songs are still unreleased.' },
     pass: { label: 'Wait and see', fx: {}, diary: null } },
 
@@ -673,13 +697,14 @@ export const CARDS = [
     req: { rating: 72, age: [21, 46] },
     weight: 2,
     gamble: { chance: 0.55 },
+    stakes: [2, -1],
     body: () => 'Forty minutes in a building where nobody makes anything. They have heard your records. You have one meeting to be the person they thought you were.',
     accept: {
       label: 'Take the meeting',
-      fx: { rating: 3, flags: ['label_backing'] },
+      fx: { flags: ['label_backing'] },
       diary: 'you took the meeting and walked out with a relationship instead of a deal, which turned out to be better.' },
     fail: {
-      fx: { rating: -2 },
+      fx: {},
       diary: 'you took the meeting, said the wrong things about your own records, and never heard from them again.' },
     pass: { label: 'Cancel it', fx: {}, diary: null } },
 
@@ -691,13 +716,14 @@ export const CARDS = [
     req: { rating: 70, age: [21, 44] },
     weight: 2,
     gamble: { chance: 0.6 },
+    stakes: [2, -1],
     body: (v) => `${v.artist} wants you out with them for eight months running the live show. It pays properly and you will not make a record the entire time.`,
     accept: {
       label: 'Go on the road',
-      fx: { rating: 2, flags: ['road_network'] },
+      fx: { flags: ['road_network'] },
       diary: 'you did eight months out with {artist} and came back knowing everybody.' },
     fail: {
-      fx: { rating: -4 },
+      fx: {},
       diary: 'you did eight months on the road and came back to find the year had happened without you.' },
     pass: { label: 'Stay in the room', fx: { rating: 1 }, diary: null } },
 
@@ -708,13 +734,14 @@ export const CARDS = [
     req: { rating: 68, age: [20, 44] },
     weight: 2,
     gamble: { chance: 0.35 },
+    stakes: [3, -2],
     body: () => 'There is a service that will make the streams look like the record is working. It is not illegal exactly, and every platform is looking for it.',
     accept: {
       label: 'Buy the numbers',
-      fx: { rating: 3 },
+      fx: {},
       diary: 'the numbers moved, the real people followed, and nobody ever asked how it started.' },
     fail: {
-      fx: { rating: -7, flags: ['burned_bridge'] },
+      fx: { flags: ['burned_bridge'] },
       diary: 'the platform caught it, stripped the streams and flagged the account, and everybody in the building heard.' },
     pass: { label: 'Let it move on its own', fx: {}, diary: null } },
 
@@ -726,13 +753,14 @@ export const CARDS = [
     req: { rating: 76, age: [23, 48] },
     weight: 2,
     gamble: { chance: 0.5 },
+    stakes: [2, -2],
     body: (v) => `The record is finished and ${v.artist} would put it out now. Holding it for the album cycle makes it a moment instead of a Friday, if the cycle ever comes.`,
     accept: {
       label: 'Hold it back',
-      fx: { rating: 2, ratingJump: 6, placement: { tier: 5 } },
+      fx: { ratingJump: 6, placement: { tier: 5 } },
       diary: 'you held the record for eight months and it came out as the moment instead of a Friday.' },
     fail: {
-      fx: { rating: -4 },
+      fx: {},
       diary: 'you held the record back and the cycle never came, and it came out two years late into nothing.' },
     pass: { label: 'Put it out Friday', fx: { rating: 1, placement: { tier: 3 } }, diary: null } },
 

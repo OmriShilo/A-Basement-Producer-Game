@@ -8,6 +8,7 @@ import {
   rollTalent, applyRating,
   PRODIGY_AT, UNDERDOG_AT, PLATEAU_CHANCE, PLATEAU_FROM_TURN,
   FIRST_BIG_JUMP, CERT_JUMP, applyJump, rollPotential,
+  applyTemp, settleTemp, shownRating,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
 import { pickLabel, signLabel, tickLabel, labelArtistNames, LABEL_CAST_BIAS } from './labels.js';
@@ -100,6 +101,7 @@ export function createRun(cabinet, seed = newSeed()) {
     talent,
     potential,
     rating: talent,
+    temp: 0,               // FORM — temporary overall, see engine/rating.js
     prodigy,
     plateaued: false,
     plateauedAt: null,
@@ -463,6 +465,9 @@ export function gambleChance(card, cast) {
  */
 export function resolveYear(s, pick, extra = {}) {
   const rand = turnRand(s, 'resolve');
+  // What the player had on screen when the year started. The delta has to
+  // track the number they can see, which now includes form.
+  const shownBefore = shownRating(s);
   const events = [];
   const offers = s.offers || [];
   const taken = pick >= 0 ? offers[pick] : null;
@@ -489,7 +494,13 @@ export function resolveYear(s, pick, extra = {}) {
     if (taken.card.gamble) {
       const chance = gambleChance(taken.card, taken.cast);
       const won = turnRand(s, `gamble|${taken.card.id}`)() < chance;
-      gamble = { won, chance };
+      // The swing is FORM, never permanent rating. Three lost bets used to
+      // strip fifteen points of career; now they cost you a bad couple of
+      // years that a single real credit wipes out.
+      const [up, down] = taken.card.stakes || [2, -2];
+      const swing = won ? up : down;
+      const moved = applyTemp(s, swing);
+      gamble = { won, chance, stakes: taken.card.stakes || [2, -2], swing, moved };
       if (!won) {
         const fail = taken.card.fail || {};
         events.push(...applyFx(s, fail.fx));
@@ -601,6 +612,14 @@ export function resolveYear(s, pick, extra = {}) {
   const jump = applyJump(s, rawJump);
   const ratingMove = s.rating - ratingBefore;
 
+  // 8b. FORM SETTLES. Anything real that landed this year banks whatever you
+  //     are carrying into permanent rating; a quiet year bleeds a point of it
+  //     back toward zero. Age decay above already came off the permanent
+  //     number only, so an old producer can still run hot and still slide.
+  const bankedSomething = madeThisYearForBank(s) || certEvents.some((e) => e.level)
+    || awardEvents.some((e) => e.won);
+  const banked = settleTemp(s, bankedSomething);
+
   // 9. THE PLATEAU — the prodigy who simply stops. Rolled once per turn from
   //    turn 3 on, and permanent when it lands.
   let plateauedNow = false;
@@ -647,9 +666,12 @@ export function resolveYear(s, pick, extra = {}) {
     pick,
     passed: offers.filter((_, i) => i !== pick).map((o) => o.card),
     ratingMove,
+    shownMove: shownRating(s) - shownBefore,
     ratingJump: jump,
     rack,
     gamble,
+    banked,
+    temp: s.temp,
     label: labelNote,
     plateauedNow,
     diary: line.text,
@@ -662,6 +684,18 @@ export function resolveYear(s, pick, extra = {}) {
   s.offers = [];
   s.phase = 'resolve';
   return s;
+}
+
+/**
+ * Did anything land this year worth banking form for?
+ *
+ * A tier-2 credit or better, not any credit at all. Banking off a tier-1
+ * mixtape cut made form a reliable income stream rather than a reward — you
+ * could carry a good bet indefinitely and cash it on the smallest thing that
+ * came along. The bar is a record somebody actually heard.
+ */
+function madeThisYearForBank(s) {
+  return s.placements.some((p) => p.turn === s.turn && !p.underground && p.tier >= 2);
 }
 
 /** One short sentence for the log's HOW IT LANDED column. */
