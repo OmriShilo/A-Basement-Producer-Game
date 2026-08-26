@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   TURNS, START_AGE, END_AGE, START_YEAR,
-  createRun, beginYear, resolveYear, advance, retire, offerIsRack, gambleChance,
+  createRun, beginYear, resolveYear, advance, retire, offerIsRack, gambleChance, cardVars,
   mergeIntoCabinet, shareText, overallRating, ratingTier,
 } from './engine/game.js';
 /* The rack drags three.js behind it — about 700kB, roughly eight times the rest
@@ -10,6 +10,7 @@ import {
    fetched the first time a year is actually spent at the keys. */
 const Rack = React.lazy(() => import('./ui/Rack.jsx'));
 import { STANDING, isArchitect } from './engine/status.js';
+import { labelStatus } from './engine/labels.js';
 import { PRODIGY_AT } from './engine/rating.js';
 import { ROSTER, BILLBOARD_CHARTS, listenersOf } from './content/roster.js';
 import { formatListeners } from './content/listeners.js';
@@ -34,6 +35,37 @@ function creditSize(p) {
   if (n === null) return p.underground ? 'UNDERGROUND' : 'CREDIT';
   const shown = `${formatListeners(n)} MONTHLY`;
   return p.underground ? `UNDERGROUND · ${shown}` : shown;
+}
+
+/**
+ * SIGNED TO — the contract indicator.
+ *
+ * A deal is the only state in the game that persists across years, so unlike
+ * everything else on the header it has to say how much of it is left. The pips
+ * are the term: filled for years served, hollow for years still owed. Reads as
+ * a countdown without needing to be one.
+ */
+function SignedTo({ s }) {
+  const l = labelStatus(s);
+  if (!l.signed) {
+    return (
+      <div>
+        <div className="lbl">Signed to</div>
+        <div className="val indie">Independent</div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="lbl">Signed to</div>
+      <div className="val label-name" title={`${l.left} of ${l.years} years left`}>{l.name}</div>
+      <div className="term" aria-label={`${l.left} of ${l.years} years left`}>
+        {Array.from({ length: l.years }).map((_, i) => (
+          <i key={i} className={i < l.years - l.left ? 'served' : ''} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const PLAQUE_ORDER = [
@@ -252,6 +284,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
               <div className="lbl">Standing</div>
               <div className="val">{STANDING}</div>
             </div>
+            <SignedTo s={s} />
             <div>
               <div className="lbl">Credits</div>
               <div className="val" style={{ color: 'var(--green)' }}>{s.placements.length}</div>
@@ -368,7 +401,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
                     </span>
                   )}
                 </div>
-                <div className="opt-body">{o.card.body({ artist: o.cast ? o.cast.name : 'them' })}</div>
+                <div className="opt-body">{o.card.body(cardVars(o, s.age))}</div>
                 {isGamble && (
                   <div className="opt-risk">
                     {Math.round(chance * 100)}% it lands · {Math.round((1 - chance) * 100)}% it goes wrong

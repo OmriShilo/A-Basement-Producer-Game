@@ -10,6 +10,8 @@ import {
   FIRST_BIG_JUMP, CERT_JUMP, applyJump, rollPotential,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
+import { pickLabel, signLabel, tickLabel, labelArtistNames, LABEL_CAST_BIAS } from './labels.js';
+import { LABEL_BY_ID } from '../content/labels.js';
 import { hashSeed, mulberry32, weightedPick, newSeed } from './rng.js';
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +107,9 @@ export function createRun(cabinet, seed = newSeed()) {
     firstBigDone: false,   // the first tier-3+ credit pays a one-time jump
     firstBigTier: 0,
     heat: 0,               // years of elevated reach left after a big credit
+    label: null,           // the current deal — see engine/labels.js
+    labelHistory: [],      // every deal this run, for the end screen
+    pendingRenewal: null,
     rackVisits: 0,     // drives the rack's diminishing return — see engine/rack.js
     maxPlacementTier: 0,
     undergroundCount: 0,
@@ -277,14 +282,32 @@ function castFor(s, card, rand) {
     if (!use.length) return null;
     // The tier rides along on the cast: a card written for 'any' has to size
     // its own payoff, and the artist object is the only thing it is handed.
-    return { ...use[Math.floor(rand() * use.length)], tier };
+    return { ...preferLabel(s, use, rand), tier };
   }
   const pool = poolFor(s, card.cast);
   if (!pool) return null;
   const fresh = pool.filter((a) => !s.usedArtists.has(a.name));
   const use = fresh.length ? fresh : pool;
   if (!use.length) return makeLocalName(rand);
-  return use[Math.floor(rand() * use.length)];
+  return preferLabel(s, use, rand);
+}
+
+/**
+ * Being signed is supposed to mean something concrete: the house's own artists
+ * are who you keep ending up with. Sign to Cactus Jack and the Travis Scott and
+ * Don Toliver records start piling up, because that is what a deal actually
+ * does for a producer. Falls straight through when you are independent, or when
+ * none of the roster is castable for this card.
+ */
+function preferLabel(s, pool, rand) {
+  const names = labelArtistNames(s);
+  if (names) {
+    const own = pool.filter((a) => names.includes(a.name));
+    if (own.length && rand() < LABEL_CAST_BIAS) {
+      return own[Math.floor(rand() * own.length)];
+    }
+  }
+  return pool[Math.floor(rand() * pool.length)];
 }
 
 function meets(s, card) {
@@ -334,6 +357,16 @@ function pickOne(pool, rand) {
   return weightedPick(byClass[chosen], rand, (c) => c.weight || 1);
 }
 
+/**
+ * Which house is at the table. A renewal always names the label you are already
+ * with — that is what makes it a renewal — and anything else picks a house that
+ * would plausibly have you at your current reach.
+ */
+function labelFor(s, card, rand) {
+  if (card.renewal) return s.pendingRenewal ? LABEL_BY_ID.get(s.pendingRenewal) : null;
+  return pickLabel(s, reachTier(s), rand);
+}
+
 /** The two offers for a year. Never the same card twice. */
 function drawOffers(s, rand) {
   const pool = eligibleCards(s);
@@ -374,13 +407,32 @@ function turnRand(s, salt) {
 /** Deal the year's two offers. */
 export function beginYear(s) {
   const rand = turnRand(s, 'deck');
-  s.offers = drawOffers(s, rand).map((card) => ({
-    card,
-    cast: castFor(s, card, mulberry32(hashSeed(`${s.seed}|${s.turn}|cast|${card.id}`))),
-  }));
+  s.offers = drawOffers(s, rand).map((card) => {
+    const r = mulberry32(hashSeed(`${s.seed}|${s.turn}|cast|${card.id}`));
+    return {
+      card,
+      cast: castFor(s, card, r),
+      // A label offer names the house at draw time, the same way a normal card
+      // names its artist, so the offer on screen is the offer that resolves.
+      label: card.labelOffer ? labelFor(s, card, r) : null,
+    };
+  });
   s.phase = s.offers.length ? 'choose' : 'resolve-empty';
   if (!s.offers.length) return resolveYear(s, -1);
   return s;
+}
+
+/**
+ * The tokens a card's body and diary can interpolate. One builder so the text
+ * on the offer screen and the text in the diary cannot drift apart.
+ */
+export function cardVars(offer, age) {
+  return {
+    artist: offer && offer.cast ? offer.cast.name : 'them',
+    label: offer && offer.label ? offer.label.name : 'the label',
+    labelLine: offer && offer.label ? offer.label.line : 'a house with a roster',
+    age,
+  };
 }
 
 /** True when taking this offer means playing The Rack before the year resolves. */
@@ -442,9 +494,16 @@ export function resolveYear(s, pick, extra = {}) {
         const fail = taken.card.fail || {};
         events.push(...applyFx(s, fail.fx));
         if (fail.diary) {
-          cardLine = fill(fail.diary, { artist: taken.cast ? taken.cast.name : 'them', age: s.age });
+          cardLine = fill(fail.diary, cardVars(taken, s.age));
         }
       }
+    }
+    if (taken.card.labelOffer && taken.label) {
+      const years = signLabel(s, taken.label, turnRand(s, `sign|${taken.label.id}`));
+      s.flags.delete('label_renewal');
+      s.pendingRenewal = null;
+      s.labelHistory.push({ name: taken.label.name, from: TURNS[s.turn].year, years });
+      events.push({ kind: 'signed', name: taken.label.name, years });
     }
     if (taken.card.rack) {
       // The rack pays out on the session, not on the card. Scored before the
@@ -459,7 +518,7 @@ export function resolveYear(s, pick, extra = {}) {
     if (!gamble || gamble.won) {
       events.push(...applyFx(s, taken.card.accept.fx));
       if (taken.card.accept.diary) {
-        cardLine = fill(taken.card.accept.diary, { artist: taken.cast ? taken.cast.name : 'them', age: s.age });
+        cardLine = fill(taken.card.accept.diary, cardVars(taken, s.age));
       }
     }
     if (s.flags.has('manager_pending') && s.managerHonest === null) {
@@ -467,6 +526,15 @@ export function resolveYear(s, pick, extra = {}) {
     }
   } else {
     s.card = null; s.cast = null;
+  }
+  // A renewal you did not take is a renewal you turned down. The offer does not
+  // sit open, and the label does not ask twice.
+  if (s.flags.has('label_renewal') && !(taken && taken.card.renewal)) {
+    const lapsed = LABEL_BY_ID.get(s.pendingRenewal);
+    if (lapsed && !cardLine) cardLine = `you let the deal with ${lapsed.name} lapse and went back to answering your own emails.`;
+    s.flags.delete('label_renewal');
+    s.pendingRenewal = null;
+    if (s.label) { s.label = null; s.flags.delete('signed'); events.push({ kind: 'labelLeft' }); }
   }
 
   // 3. the world starts taking it back
@@ -495,6 +563,16 @@ export function resolveYear(s, pick, extra = {}) {
 
   // 6. awards
   const awardEvents = resolveAwards(s, rand);
+
+  // 6b. the contract runs down. Ticked here, after this year's credits are on
+  //     the board, so the final year of a deal is judged including what you
+  //     just did with it.
+  const labelEvent = tickLabel(s, turnRand(s, 'label'));
+  if (labelEvent) {
+    events.push(labelEvent);
+    // Being dropped costs you. Not much — it is the lost access that hurts.
+    if (labelEvent.kind === 'labelDropped') events.push({ kind: 'rating', amount: -2 });
+  }
 
   // 7. the manager reveal, six years on
   if (s.flags.has('manager_pending')) {
@@ -543,6 +621,8 @@ export function resolveYear(s, pick, extra = {}) {
     awards[k] = (awards[k] || 0) + 1;
   });
   const madeThisYear = s.placements.filter((p) => p.turn === s.turn);
+  // The loudest label thing that happened this year, if any.
+  const labelNote = events.find((e) => ['signed', 'labelDropped', 'labelLeft'].includes(e.kind)) || null;
   const entry = {
     year: TURNS[s.turn].year,
     age: s.age,
@@ -550,9 +630,9 @@ export function resolveYear(s, pick, extra = {}) {
     plaques,
     awards: Object.entries(awards).map(([type, count]) => ({ type, count })),
     outcome: rack ? rackOutcome(rack)
-      : yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }),
+      : yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble, label: labelNote }),
     valence: rack && rack.hotHands ? 'standout'
-      : yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }),
+      : yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble, label: labelNote }),
   };
   s.log.push(entry);
 
@@ -570,6 +650,7 @@ export function resolveYear(s, pick, extra = {}) {
     ratingJump: jump,
     rack,
     gamble,
+    label: labelNote,
     plateauedNow,
     diary: line.text,
     decay,
@@ -584,9 +665,14 @@ export function resolveYear(s, pick, extra = {}) {
 }
 
 /** One short sentence for the log's HOW IT LANDED column. */
-function yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }) {
+function yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble, label }) {
   const plaqueCount = Object.values(plaques).reduce((a, b) => a + b, 0);
   const awardCount = Object.values(awards).reduce((a, b) => a + b, 0);
+  if (label && label.kind === 'signed') {
+    return `Signed. ${label.years} year${label.years === 1 ? '' : 's'}.`;
+  }
+  if (label && label.kind === 'labelDropped') return 'They let you go.';
+  if (label && label.kind === 'labelLeft') return 'You walked.';
   if (jump > 0) return 'Everything changed.';
   // A lost bet is the loudest thing that can happen in a year — it gets said
   // before any of the ordinary readings below.
@@ -605,8 +691,10 @@ function yearOutcome({ taken, madeThisYear, plaques, awards, ratingMove, plateau
   return ratingMove >= 3 ? 'It worked.' : 'A little better.';
 }
 
-function yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble }) {
+function yearValence({ madeThisYear, plaques, awards, ratingMove, plateauedNow, jump, gamble, label }) {
   const awardCount = Object.values(awards).reduce((a, b) => a + b, 0);
+  if (label && label.kind === 'signed') return 'standout';
+  if (label && (label.kind === 'labelDropped' || label.kind === 'labelLeft')) return 'setback';
   if (jump > 0 || awardCount || plaques.diamond) return 'standout';
   if (gamble && !gamble.won) return 'setback';
   if (plateauedNow || ratingMove < 0) return 'setback';

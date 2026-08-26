@@ -39,6 +39,14 @@
  *   repeatable  true = never leaves the deck
  *   rack     true = taking this opens THE RACK and the year is scored on what
  *            you played there, on top of the card's own fx. See engine/rack.js.
+ *   labelOffer  true = a house is offering you a deal. The label is chosen at
+ *            draw time from those that would have you (engine/labels.js) and
+ *            rides on the offer as `offer.label`; {label} in body/diary is its
+ *            name. Taking it signs you for 1–4 years.
+ *   renewal  true = this offer is the label you are already with, asking for
+ *            another term. Only eligible while the `label_renewal` flag is set,
+ *            which tickLabel sets when a term ends well. Passing on it ends the
+ *            relationship — they do not ask twice.
  *   gamble   { chance }  makes the card yellow. `chance` is a 0–1 number, or
  *            (cast) => number when the odds depend on who it cast.
  *   accept / pass / fail:
@@ -727,6 +735,49 @@ export const CARDS = [
       fx: { rating: -4 },
       diary: 'you held the record back and the cycle never came, and it came out two years late into nothing.' },
     pass: { label: 'Put it out Friday', fx: { rating: 1, placement: { tier: 3 } }, diary: null } },
+
+
+  /* ================================================================= */
+  /* LABELS — the only commitment that outlives the year you make it   */
+  /* ================================================================= */
+  {
+    /* The deal itself. Repeatable because a career can hold several, and the
+       house on the card is different each time — whoever would have you at the
+       reach you have now. Its fx is deliberately thin: signing is worth almost
+       nothing on the day. What it is worth is the three years afterwards, when
+       the label's own artists start being who you work with. */
+    id: 'l_the_deal',
+    cls: 'CONTRACT',
+    title: 'The deal',
+    labelOffer: true,
+    repeatable: true,
+    req: { rating: 66, age: [19, 44], not: ['signed'] },
+    weight: 4,
+    body: (v) => `${v.label} want you on the roster — ${v.labelLine}. Their producers get the calls you have been chasing, and for the length of the term you are theirs.`,
+    accept: {
+      label: 'Sign the deal',
+      fx: { rating: 2, flags: ['signed'] },
+      diary: 'you signed to {label} and the phone started ringing on its own.' },
+    pass: { label: 'Stay independent', fx: { rating: 1 }, diary: null } },
+
+  {
+    /* Only ever drawn when tickLabel has set label_renewal. Guaranteed a slot
+       via the high weight in drawOffers, because a renewal is a decision the
+       player has to actually be given. */
+    id: 'l_another_term',
+    cls: 'CONTRACT',
+    title: 'Another term',
+    labelOffer: true,
+    renewal: true,
+    repeatable: true,
+    req: { flags: ['label_renewal'] },
+    weight: 9,
+    body: (v) => `The term is up and ${v.label} want to go again. You know exactly what the last few years were worth. Turning it down means leaving the roster, and the room, for good.`,
+    accept: {
+      label: 'Re-sign',
+      fx: { rating: 2, flags: ['signed'] },
+      diary: 'you re-signed with {label} and stayed where the records were.' },
+    pass: { label: 'Leave the roster', fx: {}, diary: 'you let the deal with {label} lapse and went back to answering your own emails.' } },
 
   /* ================================================================= */
   /* THE ORDINARY YEARS — repeatable filler.                           */

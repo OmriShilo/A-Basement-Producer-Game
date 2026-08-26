@@ -668,3 +668,17 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--amber);
 }
+
+/* ---- signed-to indicator ------------------------------------------
+   The only header field that carries duration, so it gets a second
+   line the others do not: one pip per year of the term, filled for
+   years served. A countdown you can read without counting.          */
+.val.label-name { color: var(--amber); }
+.val.indie { color: var(--text-dim); }
+.term { display: flex; gap: 4px; margin-top: 6px; }
+.term i {
+  width: 14px; height: 4px;
+  background: var(--amber);
+  opacity: 0.28;
+}
+.term i.served { opacity: 1; }
