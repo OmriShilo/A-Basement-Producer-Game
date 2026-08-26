@@ -201,8 +201,10 @@ function territoryOpen(s, region) {
  * neighbourhood or the biggest artist alive, off the same card. These weights
  * are what makes the difference matter — a tier-1 room is eight times likelier
  * than a tier-5 one, so the year Travis Scott's name comes up is a year you
- * remember. Age still gates it through TIER_OPENS_AT: at sixteen the only door
- * open is tier 1, and the top of the roster cannot appear at all until 31.
+ * remember. What keeps a sixteen-year-old out of those rooms is reach — you can
+ * be offered one tier above your best credit and no further — not their age.
+ * Artists work with young producers constantly; the thing you have to earn is
+ * the credit, not the birthday.
  */
 const ANY_TIER_WEIGHT = { 1: 40, 2: 26, 3: 18, 4: 11, 5: 5 };
 
@@ -248,11 +250,10 @@ function anyTierOptions(s) {
     });
 }
 
-/** The tiers a card cast as 'any' could reach at this age, with weights. */
+/** The tiers a card cast as 'any' could reach, with weights. */
 function openTiers(s) {
   return Object.keys(ANY_TIER_WEIGHT)
     .map(Number)
-    .filter((t) => s.age >= TIER_OPENS_AT[t])
     .map((tier) => ({ tier, weight: ANY_TIER_WEIGHT[tier] }))
     .filter(({ tier }) => (ROSTER[TIER_KEY_BY_LEVEL[tier]] || []).length);
 }
@@ -266,11 +267,9 @@ function poolFor(s, cast) {
   if (cast.track === 'label') {
     const names = labelArtistNames(s);
     if (!names) return [];
-    // Only artists this house actually has, and only ones you are old enough
-    // to be in a room with. A nineteen-year-old on a major does not get the
-    // biggest act on the roster in their first year.
+    // Everyone the house actually has. No age filter: you are on the roster,
+    // and getting onto it is the thing that was hard.
     const tiered = Object.entries(TIER_KEY_BY_LEVEL)
-      .filter(([tier]) => s.age >= TIER_OPENS_AT[tier])
       .flatMap(([, key]) => (ROSTER[key] || []).filter((a) => names.includes(a.name)));
     // Houses like Griselda carry underground names too, and those live outside
     // the tier pools — leaving them out silently shortened those rosters.
@@ -358,13 +357,8 @@ function meets(s, card) {
   if (card.cast) {
     const pool = poolFor(s, card.cast);
     if (!pool || !pool.length) return false;
-    // Nobody gets handed a global icon at seventeen, however gifted they are.
-    // Rating alone cannot express this — a 75-talent sixteen-year-old has the
-    // ability and none of the career — so the reach is gated on age centrally
-    // rather than by editing a tier floor into every card.
-    if (card.cast.tier && s.age < TIER_OPENS_AT[card.cast.tier]) return false;
-    // ...and you have to have earned your way into rooms that size. One tier
-    // above your best credit is as far as anyone will take a chance on you.
+    // You have to have earned your way into rooms that size. One tier above
+    // your best credit is as far as anyone will take a chance on you.
     if (card.cast.tier && card.cast.tier > reachTier(s)) return false;
   }
   return true;
@@ -376,9 +370,6 @@ const ARTIST_TIER = new Map(
     (ROSTER[key] || []).map((a) => [a.name, Number(tier)])),
 );
 export const tierOfArtist = (name) => ARTIST_TIER.get(name) || 0;
-
-/** The earliest age each roster tier will work with you at all. */
-const TIER_OPENS_AT = { 1: 16, 2: 19, 3: 23, 4: 27, 5: 31 };
 
 const placementTier = (c) => (c.accept && c.accept.fx && c.accept.fx.placement
   ? c.accept.fx.placement.tier : 0);
@@ -853,7 +844,7 @@ function resolveCertifications(s, rand) {
       // into bigger rooms (reach, then guaranteed label sessions) multiplies
       // tier-5 credits, and Diamond rides on those. 0.04 -> 0.018 -> 0.010.
       // The plaque has to stay the rarest thing in the game.
-      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.042 },
+      5: { gold: 0.97, platinum: 0.8, multi: 0.45, diamond: 0.030 },
     }[q.tier] || {};
     const u = rand();
     let level = null;
