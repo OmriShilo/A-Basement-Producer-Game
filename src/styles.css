@@ -122,8 +122,9 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   flex-wrap: wrap;
 }
 .headrow-l { display: flex; align-items: baseline; gap: clamp(12px, 1.4vw, 26px); flex-wrap: wrap; row-gap: 6px; }
-.year-num { font-family: var(--anton); font-size: clamp(42px, 4.6vw, 84px); line-height: 0.8; }
-.age-num { font-family: var(--anton); font-size: clamp(22px, 2.1vw, 38px); line-height: 0.85; }
+/* Age is the only big numeral in the header now, so it takes the size and the
+   glow the calendar year used to carry. */
+.age-num { font-family: var(--anton); font-size: clamp(42px, 4.6vw, 84px); line-height: 0.8; }
 .headrow-r { display: flex; gap: clamp(16px, 2vw, 36px); text-align: right; flex-wrap: wrap; }
 .headrow-r .lbl { margin-bottom: 8px; }
 
@@ -137,16 +138,6 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   display: flex;
   flex-direction: column;
 }
-.log-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: clamp(12px, 1.1vw, 20px) clamp(14px, 1.6vw, 30px);
-  border-bottom: 1px solid var(--border);
-}
-.log-head .lbl { color: var(--text-dim); }
 .log-cols,
 .log-row {
   display: flex;
@@ -155,7 +146,6 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   padding: 0 clamp(14px, 1.6vw, 30px);
 }
 /* the header row reuses the column classes, so neutralise their row styling */
-.log-cols .c-year,
 .log-cols .c-age,
 .log-cols .c-act,
 .log-cols .c-out,
@@ -169,7 +159,9 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 }
 .log-cols {
   flex: none;
-  padding-top: clamp(8px, 0.7vw, 13px);
+  /* Was preceded by .log-head, which drew the panel's first rule. With that
+     row removed this is the top of the panel and carries a little more air. */
+  padding-top: clamp(14px, 1.2vw, 22px);
   padding-bottom: clamp(8px, 0.7vw, 13px);
   border-bottom: 1px solid var(--divider-soft);
   font-size: clamp(9px, 0.7vw, 13px);
@@ -193,8 +185,10 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .log-row:last-child { border-bottom: 0; }
 .log-row.standout { background: rgba(232, 181, 74, 0.05); }
 
-.c-year { width: clamp(38px, 3.4vw, 62px); flex: none; font-size: clamp(13px, 1.1vw, 21px); color: var(--text-dim); }
-.c-age  { width: clamp(24px, 2vw, 36px);  flex: none; font-size: clamp(12px, 1vw, 19px);   color: var(--text-dimmer); }
+/* Leftmost figure in the row now that the year column is gone, so it takes the
+   size and colour that column had rather than staying a dim afterthought. */
+.c-age  { width: clamp(30px, 2.6vw, 48px); flex: none; font-size: clamp(13px, 1.1vw, 21px); color: var(--text-dim); }
+.c-age.v-standout-age { color: var(--amber); }
 .c-act  { flex: 1; min-width: 0; font-family: var(--anton); font-size: clamp(15px, 1.6vw, 30px);
           text-transform: uppercase; letter-spacing: 0.4px; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap; }

@@ -269,15 +269,15 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
       <div className="screen-l">
         {/* header */}
         <div className="headrow">
+          {/* Age is the whole clock. The calendar year and the "year N of
+              playing" counter were both restatements of it — one turn is one
+              year, so all three moved together and only one of them is the
+              number you actually think in. */}
           <div className="headrow-l">
-            <span className="year-num glow-green">{turn.year}</span>
             <div>
               <div className="lbl" style={{ marginBottom: 7 }}>Age</div>
-              <div className="age-num">{s.age}</div>
+              <div className="age-num glow-green">{s.age}</div>
             </div>
-            <span className="lbl" style={{ fontSize: 'clamp(11px,0.95vw,18px)' }}>
-              Year {s.turn + 1} of playing
-            </span>
           </div>
           <div className="headrow-r">
             <div>
@@ -298,15 +298,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
 
         {/* the years so far */}
         <div className="log">
-          <div className="log-head">
-            <span className="lbl wide">The years so far</span>
-            <span className="lbl" style={{ letterSpacing: 4, color: 'var(--text-faint)' }}>
-              {s.log.length ? `${s.log[0].year} — ${s.log[s.log.length - 1].year}` : 'Nothing yet'}
-            </span>
-          </div>
-
           <div className="log-cols">
-            <span className="c-year">Year</span>
             <span className="c-age">Age</span>
             <span className="c-act" style={{ fontFamily: 'var(--mono)', fontSize: 'inherit' }}>What you did</span>
             <span className="c-plq">Plaques</span>
@@ -316,7 +308,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
 
           {folded.length > 0 && (
             <div className="log-collapsed">
-              + {folded[0].year} — {folded[folded.length - 1].year} &nbsp; {folded.length} earlier {folded.length === 1 ? 'year' : 'years'}
+              + age {folded[0].age} — {folded[folded.length - 1].age} &nbsp; {folded.length} earlier {folded.length === 1 ? 'year' : 'years'}
             </div>
           )}
 
@@ -330,8 +322,7 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
             )}
             {detail.map((e) => (
               <div className={`log-row${e.valence === 'standout' ? ' standout' : ''}`} key={e.year}>
-                <span className="c-year" style={e.valence === 'standout' ? { color: 'var(--amber)' } : undefined}>{e.year}</span>
-                <span className="c-age">{e.age}</span>
+                <span className={`c-age${e.valence === 'standout' ? ' v-standout-age' : ''}`}>{e.age}</span>
                 <span className={`c-act${e.valence === 'standout' ? ' v-standout' : ''}`}>{e.action}</span>
                 <span className="c-plq"><Plaques p={e.plaques} /></span>
                 <span className="c-awd"><Awards list={e.awards} /></span>
