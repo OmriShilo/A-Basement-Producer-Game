@@ -11,6 +11,7 @@ import {
   applyTemp, settleTemp, shownRating,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
+import { yearStreams } from './streams.js';
 import { pickLabel, signLabel, tickLabel, labelArtistNames, LABEL_CAST_BIAS } from './labels.js';
 import { LABEL_BY_ID } from '../content/labels.js';
 import { hashSeed, mulberry32, weightedPick, newSeed } from './rng.js';
@@ -646,6 +647,12 @@ export function resolveYear(s, pick, extra = {}) {
     year: TURNS[s.turn].year,
     age: s.age,
     action,
+    // The two numbers the log now carries per year: where the overall stood
+    // when the year closed, and how many people heard your catalogue. Streams
+    // are derived from every placement you have ever made, so this grows as a
+    // body of work rather than resetting each year — see engine/streams.js.
+    ovr: shownRating(s),
+    streams: yearStreams(s),
     plaques,
     awards: Object.entries(awards).map(([type, count]) => ({ type, count })),
     outcome: rack ? rackOutcome(rack)

@@ -15,6 +15,7 @@ import { labelStatus } from './engine/labels.js';
 import { PRODIGY_AT } from './engine/rating.js';
 import { ROSTER, BILLBOARD_CHARTS, listenersOf } from './content/roster.js';
 import { formatListeners } from './content/listeners.js';
+import { formatStreams } from './engine/streams.js';
 import { loadCabinet, saveCabinet, wipeCabinet } from './persist.js';
 import { drawCareerCard, downloadCanvas } from './ui/careerCard.js';
 
@@ -320,6 +321,8 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
           <div className="log-cols">
             <span className="c-age">Age</span>
             <span className="c-act" style={{ fontFamily: 'var(--mono)', fontSize: 'inherit' }}>What you did</span>
+            <span className="c-ovr">OVR</span>
+            <span className="c-str">Streams</span>
             <span className="c-plq">Plaques</span>
             <span className="c-awd">Awards</span>
           </div>
@@ -340,6 +343,8 @@ function CareerReview({ s, onChoose, onRetire, onCabinet }) {
               <div className={`log-row${e.valence === 'standout' ? ' standout' : ''}`} key={e.year}>
                 <span className={`c-age${e.valence === 'standout' ? ' v-standout-age' : ''}`}>{e.age}</span>
                 <span className={`c-act v-${e.valence}`}>{e.action}</span>
+                <span className="c-ovr">{e.ovr}</span>
+                <span className="c-str">{formatStreams(e.streams)}</span>
                 <span className="c-plq"><Plaques p={e.plaques} /></span>
                 <span className="c-awd"><Awards list={e.awards} /></span>
               </div>

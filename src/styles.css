@@ -148,6 +148,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 /* the header row reuses the column classes, so neutralise their row styling */
 .log-cols .c-age,
 .log-cols .c-act,
+.log-cols .c-ovr,
+.log-cols .c-str,
 .log-cols .c-plq,
 .log-cols .c-awd {
   font-family: var(--mono);
@@ -191,6 +193,15 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .c-act  { flex: 1; min-width: 0; font-family: var(--anton); font-size: clamp(15px, 1.6vw, 30px);
           text-transform: uppercase; letter-spacing: 0.4px; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap; }
+/* The overall as it stood when the year closed, sat right against the action
+   so the pair reads as one statement: what you did, and where it left you. */
+.c-ovr  { width: clamp(30px, 2.8vw, 52px); flex: none; font-family: var(--anton);
+          font-size: clamp(15px, 1.5vw, 28px); color: var(--text); text-align: right; }
+/* Streams are the number a producer actually lives by, so they are the widest
+   figure column and the only one in the accent colour. */
+.c-str  { width: clamp(58px, 6.4vw, 120px); flex: none; font-family: var(--mono);
+          font-size: clamp(12px, 1.05vw, 19px); font-variant-numeric: tabular-nums;
+          color: var(--green); text-align: right; }
 .c-plq  { width: clamp(70px, 8vw, 150px); flex: none; display: flex; align-items: center; gap: clamp(6px, 0.65vw, 12px); }
 .c-awd  { width: clamp(64px, 8.4vw, 158px); flex: none; display: flex; align-items: center; gap: 8px; }
 .c-none { font-size: clamp(12px, 0.9vw, 17px); color: var(--text-ghost); }
@@ -205,8 +216,11 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .c-empty { color: var(--text-ghost); font-family: var(--mono); font-size: clamp(12px, 0.9vw, 17px);
            text-transform: none; letter-spacing: 0; }
 
-@media (max-width: 1200px) { .c-awd { display: none; } }
-@media (max-width: 980px)  { .c-plq { display: none; } }
+/* Shed columns from the least load-bearing inward. Streams and OVR are the
+   last to go — they are the two numbers the row exists to carry. */
+@media (max-width: 1280px) { .c-awd { display: none; } }
+@media (max-width: 1040px) { .c-plq { display: none; } }
+@media (max-width: 720px)  { .c-str { display: none; } }
 
 /* plaque marks */
 .plq-grp { display: flex; align-items: center; gap: clamp(4px, 0.4vw, 7px); }
