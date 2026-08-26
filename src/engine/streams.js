@@ -24,11 +24,32 @@ import { hashSeed, mulberry32 } from './rng.js';
 const TIER_MULTIPLE = { 1: 2.5, 2: 3.5, 3: 5, 4: 7, 5: 10 };
 
 /**
- * The long tail. Index is years since release: a record does most of its work
- * immediately, then keeps earning at a shrinking rate more or less forever.
- * Anything past the table sits on the last value.
+ * THE TAIL. Index is years since release.
+ *
+ * This was far too steep — a 10M record fell to 4.2M in its second year and
+ * under a million by its fifth, which is not how catalogue behaves. A record
+ * that works does something close to its first-year number again in year two,
+ * eases off over the next few, and then settles into a plateau it holds more
+ * or less indefinitely. That plateau is the whole reason a catalogue is worth
+ * having: land one big placement at twenty-one and you never drop back to a
+ * few hundred streams again, because that song is still being played.
+ *
+ * Anything past the table sits on the last value, which is the plateau.
  */
-const DECAY = [1, 0.42, 0.2, 0.12, 0.08, 0.06, 0.05, 0.04, 0.035, 0.03, 0.025, 0.02];
+const DECAY = [1, 0.90, 0.72, 0.58, 0.48, 0.42, 0.37, 0.33, 0.30, 0.28, 0.26, 0.24, 0.22, 0.21, 0.20];
+
+/**
+ * LEGS — how long an individual record lasts, 0.78x to 1.28x the standard tail.
+ *
+ * Two records the same size do not age the same way. One is still on every
+ * playlist five years later and one is not, and the difference is not
+ * something you chose — so it is rolled per record and applied to everything
+ * after the first year. At the top of the range a song's second year actually
+ * beats its first, which is the one that got away and then came back.
+ */
+function legsOf(p) {
+  return 0.78 + rand01(`${p.artist}|${p.turn}|legs`) * 0.5;
+}
 
 /** Credits with nobody real behind them — a session nobody documented. */
 const UNCREDITED_FIRST_YEAR = [400, 26_000];
@@ -57,8 +78,10 @@ export function firstYearStreams(p) {
 /** What one record earns in a given year of its life. */
 function streamsInYear(p, yearsOld) {
   if (yearsOld < 0) return 0;
+  const base = firstYearStreams(p);
+  if (yearsOld === 0) return base;
   const d = DECAY[Math.min(yearsOld, DECAY.length - 1)];
-  return Math.round(firstYearStreams(p) * d);
+  return Math.round(base * d * legsOf(p));
 }
 
 /**
