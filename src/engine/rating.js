@@ -67,7 +67,11 @@ export function growthMultiplier(s) {
  * by then the game is about holding on to it.
  */
 
-/** Rolled once per run. Never shown, never explained, entirely load-bearing. */
+/**
+ * The ceiling you START with. Never shown. It is no longer the ceiling you are
+ * stuck with — see applyRecognition, which raises it when the evidence of what
+ * you have done outgrows it.
+ */
 export function rollPotential(talent, prodigy, rand) {
   /* Was 70..95. Lowered because gambles no longer take permanent rating off
      you: careers now reach their ceiling far more reliably, so the ceiling
@@ -244,6 +248,81 @@ export function settleTemp(s, banked) {
 /** What the player sees: what you built, plus what you are carrying. */
 export function shownRating(s) {
   return Math.max(0, Math.min(99, s.rating + s.temp));
+}
+
+
+/* ------------------------------------------------------------------ */
+/* RECOGNITION — the ceiling has to answer to the evidence             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Potential was rolled once and never moved, which meant the game could decide
+ * you were a 77 before you had played a note and then refuse to notice you
+ * became a superstar. Runs peaking over a billion annual streams were
+ * finishing as low as 48. A producer doing 2.8B a year is not a 77 — there is
+ * no reading of the world in which they are.
+ *
+ * So the roll is now a STARTING ceiling, not a permanent one. What you have
+ * actually done sets a floor underneath the rating, and the ceiling ratchets up
+ * to stay above it. The roll still decides how far talent alone carries you;
+ * evidence decides the rest, and evidence wins.
+ *
+ * Streams are the honest measure because they cannot be faked by the model —
+ * they are the sum of every real placement you ever landed, decayed. Plaques
+ * and a Grammy are their own proof and set floors of their own.
+ */
+export function earnedFloor(s) {
+  let f = 0;
+  const peak = s.peakStreams || 0;
+  if (peak >= 1_000_000) {
+    /* Steep on purpose. A gentler curve (50 + 13*log10) floored almost every
+       career, because a working producer's catalogue does hundreds of millions
+       a year quite normally — the median run finished at 85 and the number
+       stopped meaning anything. This one leaves the middle of the field alone
+       and only bites where the evidence is genuinely undeniable.
+       Anchored to what a career can actually post now that a record's first
+       year is a realistic multiple of its artist's audience: the median run
+       peaks around 140M and the very best clear a billion, so those are the
+       two ends the OVR scale has to span.
+         50M -> 62,  140M -> 74,  400M -> 85,  1B -> 95 */
+    f = Math.max(f, 18.5 + 25.5 * Math.log10(peak / 1_000_000));
+  }
+  if (s.certs.diamond) f = Math.max(f, 92);
+  else if (s.certs.multi) f = Math.max(f, 84);
+  else if (s.certs.platinum) f = Math.max(f, 74);
+  else if (s.certs.gold) f = Math.max(f, 66);
+
+  /* Awards are deliberately NOT in here, though they look like the obvious
+     evidence. Grammy eligibility is gated on the rating, so letting a win
+     raise the rating closes a loop: recognition lifts you over the gate, the
+     nomination arrives, the win floors you higher, and round again. Adding
+     them took a third of all runs to a floor of 90. Streams and plaques both
+     come from placements rather than from the rating, so they can be evidence
+     for it without feeding themselves. Awards still pay their jump. */
+
+  // Past forty the floor itself gives way, about a point and a half a year, so
+  // a legend still declines — from a legend's height rather than to nothing.
+  const years = Math.max(0, s.age - 40);
+  return Math.min(99, Math.round(f * (1 - years * 0.015)));
+}
+
+/**
+ * Apply the evidence. Called once a year, after the year's streams and plaques
+ * are in.
+ *
+ * The correction is immediate rather than gradual on purpose: if this year you
+ * did two billion streams, you are elite THIS year, and making you climb to it
+ * over the following decade at an age-damped rate is the bug being fixed.
+ */
+export function applyRecognition(s) {
+  const floor = earnedFloor(s);
+  if (floor > s.potential) s.potential = Math.min(99, floor + 3);
+  if (floor > s.rating) {
+    const before = s.rating;
+    s.rating = floor;
+    return s.rating - before;
+  }
+  return 0;
 }
 
 /* ---- reading it ---------------------------------------------------- */

@@ -8,7 +8,7 @@ import {
   rollTalent, applyRating,
   PRODIGY_AT, UNDERDOG_AT, PLATEAU_CHANCE, PLATEAU_FROM_TURN,
   FIRST_BIG_JUMP, CERT_JUMP, applyJump, rollPotential,
-  applyTemp, settleTemp, shownRating,
+  applyTemp, settleTemp, shownRating, applyRecognition,
 } from './rating.js';
 import { scoreRackVisit, rackOutcome } from './rack.js';
 import { yearStreams } from './streams.js';
@@ -103,6 +103,7 @@ export function createRun(cabinet, seed = newSeed()) {
     potential,
     rating: talent,
     temp: 0,               // FORM — temporary overall, see engine/rating.js
+    peakStreams: 0,        // best year's streams — drives the earned floor
     prodigy,
     plateaued: false,
     plateauedAt: null,
@@ -667,6 +668,16 @@ export function resolveYear(s, pick, extra = {}) {
     || awardEvents.some((e) => e.won);
   const banked = settleTemp(s, bankedSomething);
 
+  // Everything anyone heard of yours this year. Computed here rather than in
+  // the log entry below because recognition reads it first.
+  const entryStreams = yearStreams(s);
+
+  // 8c. RECOGNITION. What you have actually done sets a floor under the rating
+  //     and ratchets the ceiling above it, so a career that objectively blows
+  //     up cannot stay pinned to a number rolled before it started.
+  s.peakStreams = Math.max(s.peakStreams || 0, entryStreams);
+  const recognised = applyRecognition(s);
+
   // 9. THE PLATEAU — the prodigy who simply stops. Rolled once per turn from
   //    turn 3 on, and permanent when it lands.
   let plateauedNow = false;
@@ -698,7 +709,7 @@ export function resolveYear(s, pick, extra = {}) {
     // are derived from every placement you have ever made, so this grows as a
     // body of work rather than resetting each year — see engine/streams.js.
     ovr: shownRating(s),
-    streams: yearStreams(s),
+    streams: entryStreams,
     plaques,
     awards: Object.entries(awards).map(([type, count]) => ({ type, count })),
     outcome: rack ? rackOutcome(rack)

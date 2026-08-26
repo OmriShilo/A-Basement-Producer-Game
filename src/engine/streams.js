@@ -20,8 +20,15 @@ import { hashSeed, mulberry32 } from './rng.js';
  * listeners. Bigger acts convert a credit into more, and not only because they
  * have more listeners — a tier-5 record is promoted, playlisted and toured in
  * a way a tier-1 one is not.
+ *
+ * These were 2.5x to 10x, which put a single album cut by a 132M-listener
+ * artist at 1.3 BILLION in its first year — more than almost any real song
+ * manages in its entire life. Every career was posting numbers that should
+ * belong to a handful of them, which is what made "2B streams" look ordinary.
+ * A tier-5 album cut now does 140-400M and a tier-5 single 300-880M, which is
+ * roughly what a smash actually does.
  */
-const TIER_MULTIPLE = { 1: 2.5, 2: 3.5, 3: 5, 4: 7, 5: 10 };
+const TIER_MULTIPLE = { 1: 0.5, 2: 0.7, 3: 1.0, 4: 1.4, 5: 1.9 };
 
 /**
  * THE TAIL. Index is years since release.
