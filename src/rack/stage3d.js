@@ -62,7 +62,11 @@ export function createStage(host) {
 
     function resize() {
       const w = host.clientWidth; if (!w) return;
-      const h = Math.round(w * 0.52);
+      // Height came from width alone, so on a short or wide viewport the
+      // instrument pushed the page past one screen. Capped against the window
+      // as well; the camera reads w/h, so a squatter frame stays correct
+      // rather than stretching.
+      const h = Math.max(180, Math.min(Math.round(w * 0.52), Math.round(window.innerHeight * 0.5)));
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(w, h, false);
       renderer.domElement.style.height = h + "px";

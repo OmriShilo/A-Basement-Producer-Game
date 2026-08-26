@@ -63,27 +63,38 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 
 /* ---------- shell ---------- */
 
+/* A FIXED FRAME. This was min-height, so the two columns grew with their
+   content and pushed the page past the viewport — at 1512x900 it overflowed
+   by 146px and you had to scroll to see the options. It is now exactly one
+   viewport tall and everything inside shrinks to fit rather than overflowing
+   out of it. `min-height: 0` on the columns is what allows that: without it a
+   flex child refuses to shrink below its content. */
 .screen {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   display: flex;
 }
 .screen-l {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: clamp(14px, 1.6vw, 28px);
-  padding: clamp(20px, 2.6vw, 54px) clamp(18px, 2.8vw, 56px) clamp(18px, 2.4vw, 48px) clamp(20px, 3.2vw, 64px);
+  gap: clamp(10px, 1.1vw, 20px);
+  padding: clamp(14px, 1.8vw, 34px) clamp(14px, 2vw, 38px) clamp(12px, 1.6vw, 30px) clamp(16px, 2.2vw, 42px);
 }
 .screen-r {
   flex: none;
+  min-height: 0;
   overflow-y: auto;
-  width: clamp(300px, 30vw, 520px);
+  width: clamp(290px, 27vw, 440px);
   background: var(--rail);
   border-left: 1px solid var(--border);
-  padding: clamp(20px, 2.6vw, 54px) clamp(16px, 2.4vw, 48px) clamp(18px, 2.4vw, 48px);
+  padding: clamp(14px, 1.8vw, 34px) clamp(12px, 1.7vw, 32px) clamp(12px, 1.6vw, 30px);
   display: flex;
   flex-direction: column;
 }
@@ -118,13 +129,13 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   align-items: flex-end;
   gap: 20px;
   border-bottom: 1px solid var(--divider);
-  padding-bottom: clamp(12px, 1.2vw, 22px);
+  padding-bottom: clamp(8px, 0.85vw, 15px);
   flex-wrap: wrap;
 }
 .headrow-l { display: flex; align-items: baseline; gap: clamp(12px, 1.4vw, 26px); flex-wrap: wrap; row-gap: 6px; }
 /* Age is the only big numeral in the header now, so it takes the size and the
    glow the calendar year used to carry. */
-.age-num { font-family: var(--anton); font-size: clamp(42px, 4.6vw, 84px); line-height: 0.8; }
+.age-num { font-family: var(--anton); font-size: clamp(32px, 3.2vw, 58px); line-height: 0.8; }
 .headrow-r { display: flex; gap: clamp(16px, 2vw, 36px); text-align: right; flex-wrap: wrap; }
 .headrow-r .lbl { margin-bottom: 8px; }
 
@@ -142,8 +153,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .log-row {
   display: flex;
   align-items: center;
-  gap: clamp(8px, 1vw, 20px);
-  padding: 0 clamp(14px, 1.6vw, 30px);
+  gap: clamp(6px, 0.7vw, 14px);
+  padding: 0 clamp(10px, 1.15vw, 21px);
 }
 /* the header row reuses the column classes, so neutralise their row styling */
 .log-cols .c-age,
@@ -162,8 +173,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   flex: none;
   /* Was preceded by .log-head, which drew the panel's first rule. With that
      row removed this is the top of the panel and carries a little more air. */
-  padding-top: clamp(14px, 1.2vw, 22px);
-  padding-bottom: clamp(8px, 0.7vw, 13px);
+  padding-top: clamp(10px, 0.85vw, 16px);
+  padding-bottom: clamp(6px, 0.5vw, 9px);
   border-bottom: 1px solid var(--divider-soft);
   font-size: clamp(9px, 0.7vw, 13px);
   letter-spacing: clamp(2px, 0.22vw, 4px);
@@ -172,8 +183,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 }
 .log-collapsed {
   flex: none;
-  padding: clamp(10px, 0.8vw, 15px) clamp(14px, 1.6vw, 30px);
-  font-size: clamp(12px, 0.9vw, 17px);
+  padding: clamp(7px, 0.6vw, 11px) clamp(10px, 1.15vw, 21px);
+  font-size: clamp(10px, 0.7vw, 13px);
   letter-spacing: 2px;
   color: var(--text-faint);
   border-bottom: 1px solid var(--divider-soft);
@@ -181,29 +192,37 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.log-rows { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.log-row { flex: 1; border-bottom: 1px solid var(--divider-soft); min-height: 44px; }
+/* Rows sit at their own height at the top of the panel rather than stretching
+   to fill it. They were `flex: 1`, which meant six rows split whatever space
+   was going and each came out 119px tall — the table looked enormous no matter
+   how small its type was. The panel still fills the column; the rows just stop
+   growing to meet it, and scroll inside it on a short viewport rather than
+   pushing the page past one screen. */
+.log-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex;
+            flex-direction: column; justify-content: flex-start; }
+.log-row { flex: none; border-bottom: 1px solid var(--divider-soft);
+            padding-top: clamp(8px, 0.75vw, 14px); padding-bottom: clamp(8px, 0.75vw, 14px); }
 .log-row:last-child { border-bottom: 0; }
 .log-row.standout { background: rgba(232, 181, 74, 0.05); }
 
 /* Leftmost figure in the row now that the year column is gone, so it takes the
    size and colour that column had rather than staying a dim afterthought. */
-.c-age  { width: clamp(30px, 2.6vw, 48px); flex: none; font-size: clamp(13px, 1.1vw, 21px); color: var(--text-dim); }
+.c-age  { width: clamp(24px, 1.9vw, 34px); flex: none; font-size: clamp(11px, 0.82vw, 15px); color: var(--text-dim); }
 .c-age.v-standout-age { color: var(--amber); }
 .c-act  { flex: 1; min-width: 0; font-family: var(--anton); font-size: clamp(15px, 1.6vw, 30px);
           text-transform: uppercase; letter-spacing: 0.4px; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap; }
 /* The overall as it stood when the year closed, sat right against the action
    so the pair reads as one statement: what you did, and where it left you. */
-.c-ovr  { width: clamp(30px, 2.8vw, 52px); flex: none; font-family: var(--anton);
-          font-size: clamp(15px, 1.5vw, 28px); color: var(--text); text-align: right; }
+.c-ovr  { width: clamp(26px, 2.1vw, 38px); flex: none; font-family: var(--anton);
+          font-size: clamp(13px, 1.15vw, 21px); color: var(--text); text-align: right; }
 /* Streams are the number a producer actually lives by, so they are the widest
    figure column and the only one in the accent colour. */
-.c-str  { width: clamp(58px, 6.4vw, 120px); flex: none; font-family: var(--mono);
-          font-size: clamp(12px, 1.05vw, 19px); font-variant-numeric: tabular-nums;
+.c-str  { width: clamp(50px, 4.8vw, 88px); flex: none; font-family: var(--mono);
+          font-size: clamp(11px, 0.8vw, 14px); font-variant-numeric: tabular-nums;
           color: var(--green); text-align: right; }
-.c-plq  { width: clamp(70px, 8vw, 150px); flex: none; display: flex; align-items: center; gap: clamp(6px, 0.65vw, 12px); }
-.c-awd  { width: clamp(64px, 8.4vw, 158px); flex: none; display: flex; align-items: center; gap: 8px; }
+.c-plq  { width: clamp(56px, 6vw, 108px); flex: none; display: flex; align-items: center; gap: clamp(6px, 0.65vw, 12px); }
+.c-awd  { width: clamp(52px, 6.2vw, 112px); flex: none; display: flex; align-items: center; gap: 8px; }
 .c-none { font-size: clamp(12px, 0.9vw, 17px); color: var(--text-ghost); }
 
 /* Valence used to colour a sentence in its own column. With that column gone
@@ -248,11 +267,11 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .log-foot {
   flex: none;
   border-top: 1px solid var(--border);
-  padding: clamp(12px, 0.95vw, 18px) clamp(14px, 1.6vw, 30px);
+  padding: clamp(8px, 0.65vw, 12px) clamp(10px, 1.15vw, 21px);
   display: flex;
   align-items: center;
-  gap: clamp(14px, 1.6vw, 30px);
-  font-size: clamp(11px, 0.8vw, 15px);
+  gap: clamp(10px, 1.1vw, 20px);
+  font-size: clamp(10px, 0.68vw, 13px);
   letter-spacing: clamp(2px, 0.16vw, 3px);
   color: var(--text-dimmer);
   flex-wrap: wrap;
@@ -306,12 +325,12 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   flex: none;
   border: 1px solid var(--border);
   border-top: 3px solid var(--green);
-  padding: clamp(16px, 1.4vw, 26px) clamp(16px, 1.6vw, 30px) clamp(18px, 1.5vw, 28px);
+  padding: clamp(12px, 1.05vw, 19px) clamp(12px, 1.2vw, 22px) clamp(13px, 1.1vw, 20px);
 }
 .ovr.prodigy { border-top-color: var(--amber); }
 .ovr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .ovr-num {
-  font-family: var(--anton); font-size: clamp(52px, 5.4vw, 96px); line-height: 0.82;
+  font-family: var(--anton); font-size: clamp(40px, 3.9vw, 68px); line-height: 0.82;
   color: var(--green); text-shadow: 0 0 30px rgba(91, 232, 122, 0.4);
 }
 .ovr.prodigy .ovr-num { color: var(--amber); text-shadow: 0 0 30px rgba(232, 181, 74, 0.4); }
@@ -321,7 +340,7 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .ovr-delta .d.down { color: var(--red); }
 .ovr-delta .d.flat { color: var(--text-dimmer); }
 .ovr-since { font-size: clamp(10px, 0.72vw, 13px); letter-spacing: 3px; color: var(--text-dimmer); margin-top: 6px; white-space: nowrap; }
-.ovr-bar { display: flex; gap: 4px; margin-top: clamp(14px, 1.2vw, 22px); height: 10px; }
+.ovr-bar { display: flex; gap: 4px; margin-top: clamp(9px, 0.8vw, 14px); height: 7px; }
 .ovr-bar i { flex: 1; background: var(--divider-soft); display: block; }
 .ovr-bar i.on { background: var(--green); }
 .ovr.prodigy .ovr-bar i.on { background: var(--amber); }
@@ -338,11 +357,11 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 
 /* ---------- the pick ---------- */
 
-.pick { margin-top: auto; display: flex; flex-direction: column; gap: clamp(12px, 1.3vw, 24px); padding-top: 24px; }
+.pick { margin-top: auto; display: flex; flex-direction: column; gap: clamp(8px, 0.85vw, 15px); padding-top: clamp(12px, 1.1vw, 18px); }
 .opt {
   border: 1px solid var(--border);
   border-top: 3px solid var(--green);
-  padding: clamp(16px, 1.5vw, 28px) clamp(16px, 1.6vw, 30px) clamp(18px, 1.6vw, 30px);
+  padding: clamp(11px, 1vw, 18px) clamp(12px, 1.1vw, 20px) clamp(12px, 1.1vw, 20px);
   transition: background 120ms ease, border-color 120ms ease;
 }
 /* Colour means CARD TYPE, not position. It used to mean position — 01 green,
@@ -351,18 +370,18 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
    the wrong colour on half the cards, so `.b` no longer carries any colour. */
 .opt:hover { background: rgba(91, 232, 122, 0.06); border-color: var(--green); }
 .opt-head { display: flex; align-items: baseline; gap: clamp(10px, 0.9vw, 16px); }
-.opt-no { font-family: var(--anton); font-size: clamp(20px, 1.8vw, 32px); color: var(--green); }
-.opt-title { font-family: var(--anton); font-size: clamp(20px, 2.1vw, 38px); text-transform: uppercase; line-height: 1; }
-.opt-body { font-family: var(--courier); font-size: clamp(13px, 1.1vw, 21px); color: var(--text-body); margin-top: 13px; line-height: 1.4; }
+.opt-no { font-family: var(--anton); font-size: clamp(16px, 1.3vw, 23px); color: var(--green); }
+.opt-title { font-family: var(--anton); font-size: clamp(16px, 1.5vw, 27px); text-transform: uppercase; line-height: 1; }
+.opt-body { font-family: var(--courier); font-size: clamp(11px, 0.8vw, 15px); color: var(--text-body); margin-top: 8px; line-height: 1.4; }
 .opt-btn {
-  width: 100%; display: block; margin-top: clamp(12px, 1.1vw, 20px);
-  font-family: var(--anton); font-size: clamp(14px, 1.15vw, 21px);
+  width: 100%; display: block; margin-top: clamp(8px, 0.75vw, 13px);
+  font-family: var(--anton); font-size: clamp(12px, 0.95vw, 17px);
   letter-spacing: 3px; text-transform: uppercase;
   color: #141414; background: var(--green);
-  padding: clamp(10px, 0.8vw, 14px) 0; text-align: center;
+  padding: clamp(7px, 0.55vw, 10px) 0; text-align: center;
 }
 .opt-btn:active { filter: brightness(0.88); }
-.warn { font-family: var(--courier); font-size: clamp(13px, 1vw, 19px); color: var(--text-dimmer); line-height: 1.4; }
+.warn { font-family: var(--courier); font-size: clamp(11px, 0.78vw, 14px); color: var(--text-dimmer); line-height: 1.35; }
 
 /* ---------- generic buttons ---------- */
 
@@ -383,18 +402,28 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 
 .footbar {
   flex: none; display: flex; align-items: center; gap: 16px;
-  padding-top: clamp(12px, 1.2vw, 22px); flex-wrap: wrap;
+  padding-top: clamp(8px, 0.85vw, 15px); flex-wrap: wrap;
 }
 .footbar .spacer { margin-left: auto; }
 
 /* ---------- centred pages (title / cabinet / end) ---------- */
 
+/* Same rule as .screen: one viewport tall, never more. Panels that hold an
+   unbounded amount — a credit list, a 145-cell artist album — go inside
+   .page-body and scroll there, so the header and the buttons that get you out
+   stay put instead of being pushed off the bottom. */
 .page {
   position: relative; z-index: 1;
-  min-height: 100vh;
-  padding: clamp(20px, 3vw, 60px);
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  padding: clamp(14px, 2vw, 40px);
   max-width: 1400px; margin: 0 auto;
-  display: flex; flex-direction: column; gap: clamp(14px, 1.6vw, 28px);
+  display: flex; flex-direction: column; gap: clamp(10px, 1.1vw, 20px);
+}
+.page-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: clamp(10px, 1.1vw, 20px);
 }
 .panel { background: var(--panel); border: 1px solid var(--border); }
 .panel.pad { padding: clamp(18px, 1.8vw, 34px) clamp(18px, 2vw, 40px); }
@@ -486,14 +515,21 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
    carry a rack- prefix here.
    ================================================================== */
 
+/* One screen, like every other view. The instrument caps its own height
+   against the window (see stage3d resize), so the bay fits rather than
+   pushing the page down. */
 .rack-screen {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 30px 22px 72px;
+  padding: clamp(14px, 1.8vw, 26px) 22px clamp(14px, 1.8vw, 26px);
   font-family: var(--mono);
   color: var(--text);
+  display: flex; flex-direction: column; gap: 0;
 }
+.rack-body { flex: 1; min-height: 0; }
+.rack-rail { min-height: 0; overflow-y: auto; }
 
 .rack-head {
   display: flex; align-items: flex-end; justify-content: space-between;
@@ -529,12 +565,16 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 }
 .rack-chord.is-set { color: var(--amber); }
 
+/* `align-items: start` let the rail take its content height and run past the
+   bottom of a one-screen frame. Stretched to the row instead, with the rail
+   scrolling inside itself if the instrument list plus the hint outgrows it. */
 .rack-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) 330px;
-  gap: 22px; margin-top: 22px; align-items: start;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 23vw, 330px);
+  gap: 22px; margin-top: 22px; align-items: stretch; min-height: 0;
 }
 
 .rack-stage {
+  align-self: start;
   background: var(--panel);
   border: 1px solid var(--border);
   border-top: 2px solid var(--divider);
@@ -749,3 +789,31 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .roll-go { margin-top: clamp(18px, 2vw, 28px); }
 
 @media (prefers-reduced-motion: reduce) { .roll-marker { transition: none; } }
+
+/* ---- short viewports ----------------------------------------------
+   The frame is one screen tall at any height, so on a short laptop the
+   right rail is what runs out of room first and the Select buttons are
+   what you lose. These shed the least load-bearing things in order:
+   the passed-offer warning, then the number of lines a card's body may
+   take. The two option cards and their buttons never go.            */
+@media (max-height: 780px) {
+  .opt-body { -webkit-line-clamp: 4; line-clamp: 4; display: -webkit-box;
+              -webkit-box-orient: vertical; overflow: hidden; }
+  .tape { display: none; }
+}
+@media (max-height: 680px) {
+  .warn { display: none; }
+  .opt-body { -webkit-line-clamp: 3; line-clamp: 3; }
+  .ovr-bar { display: none; }
+  .log-foot { display: none; }
+}
+@media (max-height: 660px) {
+  /* The footbar wraps onto its own line at this width and pushes Retire off
+     the bottom. Sitting it beside the rail's edge keeps both on one row. */
+  .footbar { padding-top: clamp(6px, 0.6vw, 10px); gap: 10px; flex-wrap: nowrap; }
+  .footbar .btn { padding: 7px 12px; font-size: 11px; letter-spacing: 2px; white-space: nowrap; }
+}
+@media (max-height: 600px) {
+  .opt-body { -webkit-line-clamp: 2; line-clamp: 2; }
+  .headrow-r > div:nth-child(4) { display: none; }  /* plaques — it is in the log foot too */
+}

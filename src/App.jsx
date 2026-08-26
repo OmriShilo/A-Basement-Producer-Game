@@ -22,8 +22,15 @@ import { drawCareerCard, downloadCanvas } from './ui/careerCard.js';
 const ROSTER_ARTISTS = Object.values(ROSTER).flat();
 const ROSTER_TOTAL = ROSTER_ARTISTS.length;
 
-/** How many detail rows the log shows before older years fold away. */
-const LOG_ROWS = 6;
+/**
+ * How many detail rows the log shows before older years fold away.
+ *
+ * Raised from 6 once the rows stopped stretching: a compact row is 60px rather
+ * than 119px, so six of them left most of the panel empty. Any that do not fit
+ * on a short viewport scroll inside the panel — the page itself never grows
+ * past one screen.
+ */
+const LOG_ROWS = 8;
 
 /**
  * How big the act on a credit is, in the unit a player actually feels.
@@ -545,6 +552,10 @@ function EndScreen({ s, name, onCabinet, onTitle }) {
         </div>
       </div>
 
+      {/* Everything below the title scrolls inside the frame rather than
+          growing the page. A career's credit list has no fixed length, so the
+          page cannot be sized to it — but the frame can stay one screen. */}
+      <div className="page-body">
       <div className="grid2">
         <div className="panel pad">
           <div className="lbl wide" style={{ marginBottom: 18 }}>Liner notes</div>
@@ -621,6 +632,7 @@ function EndScreen({ s, name, onCabinet, onTitle }) {
           </div>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -660,6 +672,10 @@ function Cabinet({ cabinet: c, onBack, onWipe }) {
         <button className="btn" onClick={onBack}>Back</button>
       </div>
 
+      {/* The artist album is 145 cells and the chart grid another twelve, so
+          this one genuinely cannot fit a screen. What it can do is keep the
+          header and the Back button pinned while the shelves scroll. */}
+      <div className="page-body">
       <div className="grid2">
         <div className="panel pad">
           <div className="lbl wide" style={{ marginBottom: 18 }}>The record</div>
@@ -746,6 +762,8 @@ function Cabinet({ cabinet: c, onBack, onWipe }) {
             ))}
           </div>
         )}
+      </div>
+
       </div>
 
       <div className="footbar">
