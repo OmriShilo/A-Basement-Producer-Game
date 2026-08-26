@@ -154,3 +154,18 @@ All artist names in `roster.js` are fictional. If you want to ship with real
 artists you would be putting real people in a game as characters, which is its
 own rights question — the file is structured so that swapping them is a
 one-file change either way.
+
+---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). Use it, change it, ship it; keep the copyright
+notice.
+
+That covers the code and the writing. It does **not** cover the real artists,
+directors and labels named in `src/content/`, or the Spotify figures in
+`listeners.js`, because those are not mine to licence. See [NOTICE.md](NOTICE.md)
+before doing anything commercial with this.
+
+Vendored three.js (`src/rack/vendor/`) is MIT, Copyright © 2010–2026 three.js
+authors.
